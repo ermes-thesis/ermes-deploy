@@ -6,11 +6,16 @@ Repository containing Ansible playbooks and configuration files needed to deploy
 
 To deploy Ermes you will need [Ansible](https://docs.ansible.com/)
 
+The simplest way to run this project is with the provided **DevContainer**, that contains all the necessary except of the ssh key.
+If you add your ssh key to the ssh agent, vscode should automatically forword it to the container.
+
+Otherwise, you can install manually all the requirements.
+
 > Ansible is not available for Windows, but you can use WSL.
 
 This project requires a recent version of Ansible, not available on `apt`, that need to be installed with `pip` or `pipx`.
 
-Suggested way to install:
+To install:
 
 ```shell
 sudo apt update
@@ -35,7 +40,9 @@ ansible -i inventory.ini -m ping central_nodes
 
 The playbook expect the function registry binary to be in `../ermes-function-registry/ermes-function-registry`.
 Please manually build the executable in that position.
-The executable must be compiled for amd64 Linux platform, on Windows use WSL or compile with:
+The executable must be compiled for amd64 Linux platform (Golang compiler is provided in the DevContainer).
+
+On Windows you can use:
 ```shell
 set GOOS=linux
 set GOARCH=amd64
@@ -43,14 +50,14 @@ go build .
 ```
 
 To deploy the Function Registry the [Ansible minio role](https://github.com/ricsanfre/ansible-role-minio) is required.
-Install it with 
+If you use the DevContainer it is already installed, otherwise install it with:
 ```shell
 ansible-galaxy role install ricsanfre.minio
 ```
 
 To deploy:
 ```shell
-ansible-playbook -i inventory.ini deploy-central.yml
+ansible-playbook -i inventory.ini deploy-central-node.yml
 ```
 
 The function registry executes as a systemd service on `vmsola-508`

@@ -1,0 +1,22 @@
+{
+    "name": "Ermes Deploy",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "workspaceFolder": "/workspaces/ermes-deploy",
+    "mounts": [
+        "source=${localWorkspaceFolder}/../ermes-wasm-pool,target=/workspaces/ermes-wasm-pool,type=bind",
+        "source=${localWorkspaceFolder}/../ermes-central-repo,target=/workspaces/ermes-central-repo,type=bind",
+        "source=${localWorkspaceFolder}/../ermes-function-registry,target=/workspaces/ermes-function-registry,type=bind",
+        "source=${localWorkspaceFolder}/../ermes-generic-node,target=/workspaces/ermes-generic-node,type=bind"
+    ],
+    "customizations": {
+        "vscode": {
+            "settings": {},
+            "extensions": [
+                "redhat.ansible"
+            ]
+        }
+    }
+}
