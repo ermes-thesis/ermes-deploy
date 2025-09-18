@@ -56,3 +56,71 @@
         state: started
         enabled: yes
         daemon_reload: yes
+
+    - name: Install Redis
+      include_role:
+        name: geerlingguy.redis
+      vars:
+        redis_requirepass: "very-secure-password"
+
+    - name: Get wasmedge install script
+      get_url:
+        url: https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh
+        mode: 0755
+        dest: /tmp
+
+    - name: Install WasmEdge globally
+      shell: ./install.sh -p /usr/local
+      args:
+        chdir: /tmp
+        creates: "/usr/local/bin/wasmedge"
+
+    - name: Copy Central repo binary
+      copy:
+        src: ../ermes-central-repo/ermes-central-repo
+        dest: /usr/local/bin/ermes-central-repo
+        mode: '0755'
+
+    - name: Ensure /etc/central-repo directory exists
+      file: 
+        path: /etc/central-repo
+        state: directory
+        mode: '0755'
+
+    - name: Copy Central repo config
+      copy:
+        src: central-repo/.env
+        dest: /etc/central-repo/env
+        mode: '0644'
+
+    - name: Copy Central repo private key
+      copy:
+        src: ../ermes-central-repo/.devcontainer/private.pem
+        dest: /etc/central-repo/private.pem
+        mode: '0600'
+
+    - name: Create systemd service
+      copy:
+        dest: /etc/systemd/system/ermes-central-repo.service
+        content: |
+          [Unit]
+          Description=Ermes Central Repo
+          After=network.target redis-server.service
+          Requires=redis-server.service
+
+          [Service]
+          ExecStart=/usr/local/bin/ermes-central-repo
+          EnvironmentFile=/etc/central-repo/env
+          Restart=always
+          User=root
+          Group=root
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and start Central Repo
+      systemd:
+        name: ermes-central-repo
+        state: started
+        enabled: yes
+        daemon_reload: yes
