@@ -18,18 +18,20 @@
         src: ../ermes-function-registry/ermes-function-registry
         dest: /usr/local/bin/ermes-function-registry
         mode: '0755'
+      notify: Restart function registry
 
-    - name: Ensure /etc/function-registry directory exists
+    - name: Ensure /etc/ermes-fr/ directory exists
       file: 
-        path: /etc/function-registry
+        path: /etc/ermes-fr/
         state: directory
         mode: '0755'
 
     - name: Copy Function registry config
       copy:
-        src: function-registry/.env
-        dest: /etc/function-registry/env
+        src: function-registry/config.yaml
+        dest: /etc/ermes-fr/config.yaml
         mode: '0644'
+      notify: Restart function registry
 
     - name: Create systemd service
       copy:
@@ -42,7 +44,6 @@
 
           [Service]
           ExecStart=/usr/local/bin/ermes-function-registry
-          EnvironmentFile=/etc/function-registry/env
           Restart=always
           User=root
           Group=root
@@ -81,23 +82,25 @@
         dest: /usr/local/bin/ermes-central-repo
         mode: '0755'
 
-    - name: Ensure /etc/central-repo directory exists
+    - name: Ensure /etc/ermes-cr directory exists
       file: 
-        path: /etc/central-repo
+        path: /etc/ermes-cr
         state: directory
         mode: '0755'
 
     - name: Copy Central repo config
       copy:
-        src: central-repo/.env
-        dest: /etc/central-repo/env
+        src: central-repo/config.yaml
+        dest: /etc/ermes-cr/config.yaml
         mode: '0644'
+      notify: Restart central repo
 
     - name: Copy Central repo private key
       copy:
         src: ../ermes-central-repo/.devcontainer/private.pem
-        dest: /etc/central-repo/private.pem
+        dest: /etc/ermes-cr/private.pem
         mode: '0600'
+      notify: Restart central repo
 
     - name: Create systemd service
       copy:
@@ -110,7 +113,6 @@
 
           [Service]
           ExecStart=/usr/local/bin/ermes-central-repo
-          EnvironmentFile=/etc/central-repo/env
           Restart=always
           User=root
           Group=root
@@ -123,4 +125,16 @@
         name: ermes-central-repo
         state: started
         enabled: yes
+        daemon_reload: yes
+
+  handlers:
+    - name: Restart central repo
+      systemd:
+        name: ermes-central-repo
+        state: restarted
+        daemon_reload: yes
+    - name: Restart function registry
+      systemd:
+        name: ermes-function-registry
+        state: restarted
         daemon_reload: yes

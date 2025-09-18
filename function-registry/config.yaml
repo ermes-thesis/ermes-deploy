@@ -1,0 +1,7 @@
+MINIO_ADDR: localhost
+MINIO_PORT: 9091
+MINIO_USER: minioadmin
+MINIO_PASSWORD: minioadmin
+HTTP_PORT: 8080
+ERMES_SECRET: secret
+DEV_SECRET: dev_secret
