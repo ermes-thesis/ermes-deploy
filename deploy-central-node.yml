@@ -33,7 +33,7 @@
         mode: '0644'
       notify: Restart function registry
 
-    - name: Create systemd service
+    - name: Create function registry systemd service
       copy:
         dest: /etc/systemd/system/ermes-function-registry.service
         content: |
@@ -81,6 +81,7 @@
         src: ../ermes-central-repo/ermes-central-repo
         dest: /usr/local/bin/ermes-central-repo
         mode: '0755'
+      notify: Restart central repo
 
     - name: Ensure /etc/ermes-cr directory exists
       file: 
@@ -102,7 +103,7 @@
         mode: '0600'
       notify: Restart central repo
 
-    - name: Create systemd service
+    - name: Create central repo systemd service
       copy:
         dest: /etc/systemd/system/ermes-central-repo.service
         content: |
