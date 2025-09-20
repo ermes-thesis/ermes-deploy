@@ -1,5 +1,6 @@
-- hosts: central_nodes
-  become: yes
+- name: Deploy Ermes Central Node
+  hosts: central_nodes
+  become: true
   vars:
     minio_root_user: "minioadmin"
     minio_root_password: "minioadmin"
@@ -10,31 +11,31 @@
         policy: private
   tasks:
     - name: Install minio
-      include_role:
+      ansible.builtin.include_role:
         name: ricsanfre.minio
 
     - name: Copy Function registry binary
-      copy:
+      ansible.builtin.copy:
         src: ../ermes-function-registry/ermes-function-registry
         dest: /usr/local/bin/ermes-function-registry
         mode: '0755'
       notify: Restart function registry
 
     - name: Ensure /etc/ermes-fr/ directory exists
-      file: 
+      ansible.builtin.file:
         path: /etc/ermes-fr/
         state: directory
         mode: '0755'
 
     - name: Copy Function registry config
-      copy:
+      ansible.builtin.copy:
         src: function-registry/config.yaml
         dest: /etc/ermes-fr/config.yaml
         mode: '0644'
       notify: Restart function registry
 
     - name: Create function registry systemd service
-      copy:
+      ansible.builtin.copy:
         dest: /etc/systemd/system/ermes-function-registry.service
         content: |
           [Unit]
@@ -50,61 +51,62 @@
 
           [Install]
           WantedBy=multi-user.target
+        mode: '0644'
 
     - name: Enable and start Function Registry
-      systemd:
+      ansible.builtin.systemd:
         name: ermes-function-registry
         state: started
-        enabled: yes
-        daemon_reload: yes
+        enabled: true
+        daemon_reload: true
 
     - name: Install Redis
-      include_role:
+      ansible.builtin.include_role:
         name: geerlingguy.redis
       vars:
         redis_requirepass: "very-secure-password"
 
     - name: Get wasmedge install script
-      get_url:
+      ansible.builtin.get_url:
         url: https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh
-        mode: 0755
+        mode: '0755'
         dest: /tmp
 
     - name: Install WasmEdge globally
-      shell: ./install.sh -p /usr/local
+      ansible.builtin.command: ./install.sh -p /usr/local
       args:
         chdir: /tmp
         creates: "/usr/local/bin/wasmedge"
 
     - name: Copy Central repo binary
-      copy:
+      ansible.builtin.copy:
         src: ../ermes-central-repo/ermes-central-repo
         dest: /usr/local/bin/ermes-central-repo
         mode: '0755'
       notify: Restart central repo
 
     - name: Ensure /etc/ermes-cr directory exists
-      file: 
+      ansible.builtin.file:
         path: /etc/ermes-cr
         state: directory
         mode: '0755'
 
     - name: Copy Central repo config
-      copy:
+      ansible.builtin.copy:
         src: central-repo/config.yaml
         dest: /etc/ermes-cr/config.yaml
         mode: '0644'
       notify: Restart central repo
 
     - name: Copy Central repo private key
-      copy:
+      ansible.builtin.copy:
         src: ../ermes-central-repo/.devcontainer/private.pem
         dest: /etc/ermes-cr/private.pem
         mode: '0600'
       notify: Restart central repo
 
     - name: Create central repo systemd service
-      copy:
+      ansible.builtin.copy:
         dest: /etc/systemd/system/ermes-central-repo.service
         content: |
           [Unit]
@@ -120,22 +122,24 @@
 
           [Install]
           WantedBy=multi-user.target
+        mode: '0644'
 
     - name: Enable and start Central Repo
-      systemd:
+      ansible.builtin.systemd:
         name: ermes-central-repo
         state: started
-        enabled: yes
-        daemon_reload: yes
+        enabled: true
+        daemon_reload: true
 
   handlers:
     - name: Restart central repo
-      systemd:
+      ansible.builtin.systemd:
         name: ermes-central-repo
         state: restarted
-        daemon_reload: yes
+        daemon_reload: true
+
     - name: Restart function registry
-      systemd:
+      ansible.builtin.systemd:
         name: ermes-function-registry
         state: restarted
-        daemon_reload: yes
+        daemon_reload: true
