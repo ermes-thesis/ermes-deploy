@@ -29,7 +29,7 @@
 
     - name: Copy Function registry config
       ansible.builtin.copy:
-        src: function-registry/config.yaml
+        src: fr-config.yaml
         dest: /etc/ermes-fr/config.yaml
         mode: '0644'
       notify: Restart function registry
@@ -61,10 +61,18 @@
         daemon_reload: true
 
     - name: Install Redis
-      ansible.builtin.include_role:
-        name: geerlingguy.redis
+      ansible.builtin.include_tasks: tasks/install_redis.yml
+
+    - name: Write Redis configuration
+      ansible.builtin.template:
+        src: redis.conf.j2
+        dest: /etc/redis/redis.conf
+        owner: root
+        group: root
+        mode: '0644'
       vars:
-        redis_requirepass: "very-secure-password"
+        redis_maxmemory: "1gb"
+      notify: Restart redis
 
     - name: Get wasmedge install script
       ansible.builtin.get_url:
@@ -93,7 +101,7 @@
 
     - name: Copy Central repo config
       ansible.builtin.copy:
-        src: central-repo/config.yaml
+        src: cr-config.yaml
         dest: /etc/ermes-cr/config.yaml
         mode: '0644'
       notify: Restart central repo
@@ -143,3 +151,8 @@
         name: ermes-function-registry
         state: restarted
         daemon_reload: true
+
+    - name: Restart redis
+      ansible.builtin.service:
+        name: redis-server
+        state: restarted

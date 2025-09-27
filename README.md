@@ -54,11 +54,10 @@ set GOARCH=amd64
 go build .
 ```
 
-To deploy the central node the [Ansible minio role](https://github.com/ricsanfre/ansible-role-minio) and the [Ansible role redis](https://github.com/geerlingguy/ansible-role-redis) are required.
-If you use the DevContainer they are already installed, otherwise install them with:
+To deploy the central node the [Ansible minio role](https://github.com/ricsanfre/ansible-role-minio) is required.
+If you use the DevContainer it is already installed, otherwise install it with:
 ```bash
 ansible-galaxy role install ricsanfre.minio
-ansible-galaxy role install geerlingguy.redis
 ```
 
 To deploy:

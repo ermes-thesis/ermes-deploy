@@ -1,0 +1,21 @@
+- name: Deploy Ermes Nodes
+  hosts: nodes
+  become: true
+  tasks:
+    - name: Install Redis
+      ansible.builtin.include_tasks: tasks/install_redis.yml
+
+    - name: Write Redis configuration
+      ansible.builtin.template:
+        src: redis.conf.j2
+        dest: /etc/redis/redis.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart redis
+
+  handlers:
+    - name: Restart redis
+      ansible.builtin.service:
+        name: redis-server
+        state: restarted
