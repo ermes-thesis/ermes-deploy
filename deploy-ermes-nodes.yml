@@ -1,6 +1,8 @@
 - name: Deploy Ermes Nodes
   hosts: nodes
   become: true
+  vars_files:
+    - files/network.yaml
   tasks:
     - name: Install Redis
       ansible.builtin.include_tasks: tasks/install_redis.yml
@@ -14,8 +16,70 @@
         mode: '0644'
       notify: Restart redis
 
+    - name: Install WasmEdge
+      ansible.builtin.include_tasks: "tasks/install_wasmedge.yml"
+
+    - name: Copy Ermes Node binary
+      ansible.builtin.copy:
+        src: ../ermes-generic-node/ermes-node
+        dest: /usr/local/bin/ermes-node
+        mode: '0755'
+      notify: Restart Ermes Node
+
+    - name: Copy group token public key
+      ansible.builtin.copy:
+        src: ../ermes-generic-node/keys/public.pem
+        dest: /etc/ermes-node/token-public-key.pem
+        mode: '0755'
+      notify: Restart Ermes Node
+
+    - name: Ensure /etc/ermes-node/ directory exists
+      ansible.builtin.file:
+        path: /etc/ermes-node/
+        state: directory
+        mode: '0755'
+
+    - name: Copy Ermes Node config
+      ansible.builtin.template:
+        src: templates/node.conf.j2
+        dest: /etc/ermes-node/config.yaml
+        mode: '0644'
+      notify: Restart Ermes Node
+
+    - name: Create Ermes Node systemd service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ermes-node.service
+        content: |
+          [Unit]
+          Description=Ermes Node
+          After=network.target redis-server.service
+          Requires=redis-server.service
+
+          [Service]
+          ExecStart=/usr/local/bin/ermes-node /etc/ermes-node/config.yaml
+          Restart=always
+          User=root
+          Group=root
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+
+    - name: Enable and start Ermes Node
+      ansible.builtin.systemd:
+        name: ermes-node
+        state: started
+        enabled: true
+        daemon_reload: true
+
   handlers:
     - name: Restart redis
       ansible.builtin.service:
         name: redis-server
         state: restarted
+
+    - name: Restart Ermes Node
+      ansible.builtin.systemd:
+        name: ermes-node
+        state: restarted
+        daemon_reload: true
