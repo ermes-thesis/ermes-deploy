@@ -1,0 +1,12 @@
+# tasks/install_wasmedge.yml
+- name: Get wasmedge install script
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh
+    mode: '0755'
+    dest: /tmp
+
+- name: Install WasmEdge globally
+  ansible.builtin.command: ./install.sh -p /usr/local
+  args:
+    chdir: /tmp
+    creates: "/usr/local/bin/wasmedge"

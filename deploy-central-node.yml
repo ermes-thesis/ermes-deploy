@@ -74,17 +74,8 @@
         redis_maxmemory: "1gb"
       notify: Restart redis
 
-    - name: Get wasmedge install script
-      ansible.builtin.get_url:
-        url: https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh
-        mode: '0755'
-        dest: /tmp
-
-    - name: Install WasmEdge globally
-      ansible.builtin.command: ./install.sh -p /usr/local
-      args:
-        chdir: /tmp
-        creates: "/usr/local/bin/wasmedge"
+    - name: Install WasmEdge
+      ansible.builtin.include_tasks: "tasks/install_wasmedge.yml"
 
     - name: Copy Central repo binary
       ansible.builtin.copy:
