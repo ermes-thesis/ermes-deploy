@@ -108,7 +108,7 @@
 
     - name: Copy Central repo private key
       ansible.builtin.copy:
-        src: ../ermes-central-repo/.devcontainer/private.pem
+        src: ../ermes-central-repo/keys/private.pem
         dest: /etc/ermes-cr/private.pem
         mode: '0600'
       notify: Restart central repo
