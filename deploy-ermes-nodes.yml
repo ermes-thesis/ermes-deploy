@@ -26,18 +26,18 @@
         mode: '0755'
       notify: Restart Ermes Node
 
+    - name: Ensure /etc/ermes-node/ directory exists
+      ansible.builtin.file:
+        path: /etc/ermes-node/
+        state: directory
+        mode: '0755'
+
     - name: Copy group token public key
       ansible.builtin.copy:
         src: ../ermes-generic-node/keys/public.pem
         dest: /etc/ermes-node/token-public-key.pem
         mode: '0755'
       notify: Restart Ermes Node
-
-    - name: Ensure /etc/ermes-node/ directory exists
-      ansible.builtin.file:
-        path: /etc/ermes-node/
-        state: directory
-        mode: '0755'
 
     - name: Copy Ermes Node config
       ansible.builtin.template:
