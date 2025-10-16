@@ -1,0 +1,41 @@
+# ============================================================
+# Stop Ermes regular nodes
+# ============================================================
+- name: Stop Ermes Node
+  hosts: nodes
+  become: true
+  tasks:
+    - name: Stop Ermes Node and Redis
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - ermes-node
+        - redis-server
+      register: stop_result
+      failed_when: >
+        stop_result is failed and
+        ('Could not find the requested service' not in stop_result.msg)
+
+
+# ============================================================
+# Stop Ermes central nodes (optional)
+# ============================================================
+- name: Stop Ermes Central Node
+  hosts: central_nodes
+  become: true
+  tasks:
+    - name: Stop Central Repo, Function Registry, and Redis/MinIO
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - ermes-central-repo
+        - ermes-function-registry
+        - redis-server
+        - minio
+      register: stop_result
+      failed_when: >
+        stop_result is failed and
+        ('Could not find the requested service' not in stop_result.msg)
+      when: stop_central | default(false) | bool
