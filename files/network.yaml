@@ -48,7 +48,7 @@ common:
     leaderThreshold: 5
     followerThreshold: 5
     viewSize: 5
-    idleTimeoutMs: 1000
+    idleTimeoutMs: 30000
     gravityConstant: 9.81 
   lru:
     size: 2000
@@ -65,6 +65,9 @@ common:
       ttl: 3600s
       binDir: "./functionCache"
     templateCache:
+      size: 100
+      ttl: 3600s
+    latestCache:
       size: 100
       ttl: 3600s
     functionRegistry:
