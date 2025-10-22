@@ -7,6 +7,26 @@
     - name: Install Redis
       ansible.builtin.include_tasks: tasks/install_redis.yml
 
+    # noqa no-changed-when
+    - name: Flush Redis database (optional)
+      ansible.builtin.command: redis-cli -a "{{ redis_password }}" FLUSHALL
+      when: flush_redis | bool
+      notify: Restart Ermes Node
+
+    # noqa no-changed-when
+    - name: Drop Redis index (optional)
+      ansible.builtin.command: redis-cli -a "{{ redis_password }}" FT.DROPINDEX metadata_index
+      when: flush_redis | bool
+      notify: Restart Ermes Node
+
+    # noqa no-changed-when
+    - name: Svuota i log senza cancellare i file
+      ansible.builtin.shell: "cat /dev/null > /genLogs/general.log"
+      args:
+        executable: /bin/bash
+      when: flush_redis | bool
+      notify: Restart Ermes Node
+
     - name: Write Redis configuration
       ansible.builtin.template:
         src: redis.conf.j2
@@ -60,6 +80,8 @@
           Restart=always
           User=root
           Group=root
+
+          StandardError=append:/genLogs/ermes-node.err.log
 
           [Install]
           WantedBy=multi-user.target

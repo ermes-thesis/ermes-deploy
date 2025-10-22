@@ -7,12 +7,18 @@
     minio_buckets:
       - name: functions
         policy: private
-      - name: queries
+      - name: templates
         policy: private
   tasks:
     - name: Install minio
       ansible.builtin.include_role:
         name: ricsanfre.minio
+
+    # noqa no-changed-when
+    - name: Flush Redis database (optional)
+      ansible.builtin.command: redis-cli -a "{{ redis_password }}" FLUSHALL
+      when: flush_redis | bool
+      notify: Restart central repo
 
     - name: Copy Function registry binary
       ansible.builtin.copy:

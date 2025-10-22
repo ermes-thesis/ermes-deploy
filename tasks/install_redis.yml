@@ -22,7 +22,3 @@
     name: redis
     state: present
     update_cache: true
-
-- name: Flush Redis database (optional)
-  ansible.builtin.command: redis-cli -a "{{ redis_password }}" FLUSHALL
-  when: flush_redis | bool
