@@ -1,41 +1,41 @@
 nodes:
-  - name: "Milan"
-    domain: "Milan"
+  - name: "IT"
+    domain: "IT"
     address: 10.10.101.57
     is_cloud: true
     latency_up: 0
-  - name: "POLIMI"
-    domain: "Milan/POLIMI"
+  - name: "Milan"
+    domain: "IT/Milan"
     address: 10.10.101.56
     is_cloud: false
     latency_up: 10
-  - name: "DEIB"
-    domain: "Milan/POLIMI/DEIB"
+  - name: "POLIMI"
+    domain: "IT/Milan/POLIMI"
     address: 10.10.101.54
     is_cloud: false
     latency_up: 2
-  - name: "DICA"
-    domain: "Milan/POLIMI/DICA"
+  - name: "UNIMI"
+    domain: "IT/Milan/UNIMI"
     address: 10.10.101.53
     is_cloud: false
     latency_up: 3
-  - name: "FISI"
-    domain: "Milan/POLIMI/FISI"
+  - name: "Bocconi"
+    domain: "IT/Milan/Bocconi"
     address: 10.10.101.52
     is_cloud: false
     latency_up: 3
-  - name: "UNIMI"
-    domain: "Milan/UNIMI"
+  - name: "Rome"
+    domain: "IT/Rome"
     address: 10.10.101.55
     is_cloud: false
     latency_up: 7
-  - name: "inf"
-    domain: "Milan/UNIMI/inf"
+  - name: "LaSapienza"
+    domain: "IT/Rome/LaSapienza"
     address: 10.10.101.51
     is_cloud: false
     latency_up: 1
-  - name: "inf"
-    domain: "Milan/UNIMI/med"
+  - name: "TorVergata"
+    domain: "IT/Rome/TorVergata"
     address: 10.10.101.50
     is_cloud: false
     latency_up: 1
@@ -73,7 +73,6 @@ common:
     functionRegistry:
       address: "10.10.101.58"
       port: 8080
-    latestCacheTtl: 3600s 
   scheduler:
     groupTokenProviderAddress: "10.10.101.58"
     groupTokenProviderPort: 8081
