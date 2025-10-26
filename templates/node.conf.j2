@@ -46,6 +46,10 @@ hierarchy:
     []
 {% endif %}
 
+  existingDomains:
+{% for n in nodes | sort(attribute='domain') %}
+    - "{{ n.domain }}"
+{% endfor %}
 
 # === Common config ===
 {% set filtered_common = common | dict2items | rejectattr('key','in',['port','secret','clientSecret']) | list %}
