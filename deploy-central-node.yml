@@ -17,7 +17,7 @@
     # noqa no-changed-when
     - name: Flush Redis database (optional)
       ansible.builtin.command: redis-cli -a "{{ redis_password }}" FLUSHALL
-      when: flush_redis | bool
+      when: flush | bool
       notify: Restart central repo
 
     - name: Copy Function registry binary

@@ -1,30 +1,30 @@
 - name: Deploy Ermes Nodes
   hosts: nodes
   become: true
-  vars_files:
-    - files/network.yaml
   tasks:
     - name: Install Redis
       ansible.builtin.include_tasks: tasks/install_redis.yml
+      when: not (skip_install | bool)
 
     # noqa no-changed-when
     - name: Flush Redis database (optional)
       ansible.builtin.command: redis-cli -a "{{ redis_password }}" FLUSHALL
-      when: flush_redis | bool
+      when: flush | bool
       notify: Restart Ermes Node
 
     # noqa no-changed-when
     - name: Drop Redis index (optional)
       ansible.builtin.command: redis-cli -a "{{ redis_password }}" FT.DROPINDEX metadata_index
-      when: flush_redis | bool
+      when: flush | bool
       notify: Restart Ermes Node
 
-    # noqa no-changed-when
     - name: Svuota i log senza cancellare i file
-      ansible.builtin.shell: "cat /dev/null > /genLogs/general.log"
-      args:
-        executable: /bin/bash
-      when: flush_redis | bool
+      ansible.builtin.copy:
+        content: ""
+        dest: "{{ item }}"
+        mode: '0755'
+      loop: "{{ log_files }}"
+      when: flush | bool
       notify: Restart Ermes Node
 
     - name: Write Redis configuration
@@ -34,16 +34,28 @@
         owner: root
         group: root
         mode: '0644'
+      when: not (skip_install | bool)
       notify: Restart redis
 
     - name: Install WasmEdge
       ansible.builtin.include_tasks: "tasks/install_wasmedge.yml"
+      when: not (skip_install | bool)
 
-    - name: Copy Ermes Node binary
+    - name: Copy Ermes Node archive
       ansible.builtin.copy:
-        src: ../ermes-generic-node/ermes-node
-        dest: /usr/local/bin/ermes-node
+        src: "{{ bin_path }}.tar.xz"
+        dest: /tmp/ermes-node.tar.xz
+        mode: '0644'
+      register: copy_result
+
+    - name: Extract Ermes Node binary
+      ansible.builtin.unarchive:
+        src: /tmp/ermes-node.tar.xz
+        dest: /usr/local/bin/
+        remote_src: true
         mode: '0755'
+      # noqa no-handler
+      when: copy_result.changed
       notify: Restart Ermes Node
 
     - name: Ensure /etc/ermes-node/ directory exists
@@ -51,13 +63,15 @@
         path: /etc/ermes-node/
         state: directory
         mode: '0755'
+      when: not (skip_install | bool)
 
     - name: Copy group token public key
       ansible.builtin.copy:
         src: ../ermes-generic-node/keys/public.pem
-        dest: /etc/ermes-node/token-public-key.pem
+        dest: "{{ common.groupTokenPublicKeyPath }}"
         mode: '0755'
       notify: Restart Ermes Node
+      when: not (skip_install | bool)
 
     - name: Copy Ermes Node config
       ansible.builtin.template:
@@ -86,6 +100,7 @@
           [Install]
           WantedBy=multi-user.target
         mode: '0644'
+      when: not (skip_install | bool)
 
     - name: Enable and start Ermes Node
       ansible.builtin.systemd:
@@ -93,6 +108,7 @@
         state: started
         enabled: true
         daemon_reload: true
+      when: not (skip_install | bool)
 
   handlers:
     - name: Restart redis

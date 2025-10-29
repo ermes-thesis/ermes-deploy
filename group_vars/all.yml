@@ -1,2 +1,2 @@
 redis_password: "very-secure-password"
-flush_redis: false
+flush: false
