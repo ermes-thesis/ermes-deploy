@@ -1,0 +1,1 @@
+scp $1 ubuntu@100.112.91.33:/home/ubuntu
