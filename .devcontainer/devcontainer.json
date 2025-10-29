@@ -11,6 +11,7 @@
         "source=${localWorkspaceFolder}/../ermes-function-registry,target=/workspaces/ermes-function-registry,type=bind",
         "source=${localWorkspaceFolder}/../ermes-generic-node,target=/workspaces/ermes-generic-node,type=bind"
     ],
+    "postCreateCommand": "chmod -R 755 /workspaces",
     "customizations": {
         "vscode": {
             "settings": {},
