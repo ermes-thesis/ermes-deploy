@@ -49,7 +49,9 @@ common:
     followerThreshold: 5
     viewSize: 5
     idleTimeoutMs: 30000
-    gravityConstant: 9.81 
+    gravityConstant: 9.81
+    knownCollectionsDumpPath: /genLogs/dump.ndjson
+    knownCollectionsDumpInterval: 30s
   lru:
     size: 10000
     safeLevel: 0.8  
@@ -81,5 +83,6 @@ common:
 
 log_files:
   - /genLogs/general.log
+  - /genLogs/dump.ndjson
   - /genLogs/ermes-node.err.log
   - /genLogs/ermes-node.out.log
