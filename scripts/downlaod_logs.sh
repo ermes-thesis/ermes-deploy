@@ -1,13 +1,13 @@
 #!/bin/bash
 NODES=("10.10.101.50" "10.10.101.51" "10.10.101.52" "10.10.101.53" "10.10.101.54" "10.10.101.55" "10.10.101.56" "10.10.101.57")
-REMOTE_PATH="/genLogs/general.log"
+REMOTE_PATH="/genLogs/*"
 LOCAL_DIR="./logs"
 
 mkdir -p "$LOCAL_DIR"
 
 for node in "${NODES[@]}"; do
     echo "🔹 Scarico log da $node..."
-    scp -J ubuntu@100.112.91.33 ubuntu@$node:$REMOTE_PATH "$LOCAL_DIR/$node.log"
+    scp -J ubuntu@100.112.91.33 ubuntu@$node:$REMOTE_PATH "$LOCAL_DIR/$node/"
 done
 
 echo "✅ Tutti i log scaricati in $LOCAL_DIR/"
