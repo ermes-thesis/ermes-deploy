@@ -20,10 +20,17 @@ def send_request(url: str, method: str = 'GET', **kwargs) -> Dict:
     try:
         response = requests.request(method, url, **kwargs)
         elapsed = time.time() - start_time
-        time.sleep(1)
+        
+        host = ""
+        if "X-ERMES-EXECUTION-HOST" in response.headers:
+            host = response.headers["X-ERMES-EXECUTION-HOST"]
+        if host in url:
+            host += " (local)"
+        
         return {
             'url': url,
             'status_code': response.status_code,
+            'execution_host': host,
             'elapsed_time': elapsed,
             'success': True,
             'content_length': len(response.content),
@@ -35,6 +42,7 @@ def send_request(url: str, method: str = 'GET', **kwargs) -> Dict:
         return {
             'url': url,
             'status_code': None,
+            'execution_host': host,
             'elapsed_time': elapsed,
             'success': False,
             'content': response.json(),
@@ -72,7 +80,11 @@ def send_parallel_requests(
         for req_config in requests_list:
             url = req_config.pop('url')
             method = req_config.pop('method', 'GET')
-            future = executor.submit(send_request, url, method, **req_config)
+            def send_and_sleep(url0, method0, **req_config0):
+                res = send_request(url0, method0, **req_config0)
+                time.sleep(0.3)
+                return res
+            future = executor.submit(send_and_sleep, url, method, **req_config)
             future_to_config[future] = url
 
         # Collect results as they complete
@@ -80,7 +92,7 @@ def send_parallel_requests(
             try:
                 result = future.result()
                 results.append(result)
-                print(f"✓ {result['url']} - Status: {result['status_code']} - Time: {result['elapsed_time']:.2f}s, Body: {result['content']}")
+                print(f"✓ {result['url']} - Status: {result['status_code']} - Time: {result['elapsed_time']:.3f}s, Body: {result['content']}, Execution host: {result["execution_host"]}")
             except Exception as e:
                 url = future_to_config[future]
                 print(f"✗ {url} - Error: {str(e)}")
@@ -100,7 +112,7 @@ def print_summary(results: List[Dict]):
     print(f"Total requests: {total}")
     print(f"Successful: {successful}")
     print(f"Failed: {failed}")
-    print(f"Average response time: {avg_time:.2f}s")
+    print(f"Average response time: {avg_time:.4f}s")
     print("="*60)
 
 
@@ -110,6 +122,7 @@ HOSTS = [
     "10.10.101.52",
     "10.10.101.53",
     "10.10.101.54",
+    "10.10.101.55",
 ]
 
 
@@ -125,7 +138,7 @@ if __name__ == "__main__":
     print("Token: ", token)
 
     print("Creating collection...\n")
-    res = send_request('http://10.10.101.50:12345/invoke-function/functionCreateCollections','POST',**{'headers': {
+    res = send_request('http://10.10.101.55:12345/invoke-function/functionCreateCollections','POST',**{'headers': {
                 'X-ERMES-GROUPS': token,
                 'X-CLIENT-SECRET': 'client-secret'
             } ,
@@ -146,9 +159,9 @@ if __name__ == "__main__":
                 'X-ERMES-QUERY': '{\"query\": {\"name\": \"'+colName+'\"}}'
             },
             'json': {
-               'data': 'prova!',
+               'data': 'write number '+ str(i) +" from " + host,
             }
-        } for i in range(10) for host in HOSTS
+        } for i in range(1000) for host in HOSTS
     ]
 
     print("Sending parallel requests with different configurations...\n")
