@@ -18,6 +18,13 @@
       when: flush | bool
       notify: Restart Ermes Node
 
+    - name: Ensure /var/log/ermes-node/ directory exists
+      ansible.builtin.file:
+        path: /var/log/ermes-node
+        state: directory
+        mode: '0755'
+      when: not (skip_install | bool)
+
     - name: Svuota i log senza cancellare i file
       ansible.builtin.copy:
         content: ""
@@ -95,7 +102,7 @@
           User=root
           Group=root
 
-          StandardError=append:/genLogs/ermes-node.err.log
+          StandardError=append:/var/log/ermes-node/ermes-node.err.log
 
           [Install]
           WantedBy=multi-user.target

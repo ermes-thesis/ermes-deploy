@@ -50,7 +50,7 @@ common:
     viewSize: 5
     idleTimeoutMs: 30000
     gravityConstant: 9.81
-    knownCollectionsDumpPath: /genLogs/dump.ndjson
+    knownCollectionsDumpPath: /var/log/ermes-node/dump.ndjson
     knownCollectionsDumpInterval: 30s
   lru:
     size: 10000
@@ -80,9 +80,19 @@ common:
     groupTokenProviderPort: 8081
     wasmRuntime: "wasmtime" 
   groupTokenPublicKeyPath: "/etc/ermes-node/token-public-key.pem"
+  logger:
+    level: 0
+    output:
+      logDir: /var/log/ermes-node
+      logFileName: general.log
+    stdoutEnabled: false
+    addSource: true
+    colored: true
+    rolling: true
+    muted: false
 
 log_files:
-  - /genLogs/general.log
-  - /genLogs/dump.ndjson
-  - /genLogs/ermes-node.err.log
-  - /genLogs/ermes-node.out.log
+  - /var/log/ermes-node/general.log
+  - /var/log/ermes-node/dump.ndjson
+  - /var/log/ermes-node/ermes-node.err.log
+  # - /var/log/ermes-node/ermes-node.out.log
