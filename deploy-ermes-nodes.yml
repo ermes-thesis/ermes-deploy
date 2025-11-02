@@ -18,14 +18,35 @@
       when: flush | bool
       notify: Restart Ermes Node
 
-    - name: Ensure /var/log/ermes-node/ directory exists
+    - name: Ensure directory exists {{ common.logger.output.logDir }}
       ansible.builtin.file:
-        path: /var/log/ermes-node
+        path: "{{ common.logger.output.logDir }}"
         state: directory
         mode: '0755'
       when: not (skip_install | bool)
 
-    - name: Svuota i log senza cancellare i file
+    - name: Stop Ermes Node to clear logs
+      ansible.builtin.systemd:
+        name: ermes-node
+        state: stopped
+      when: flush | bool
+
+    - name: Get list of log files
+      ansible.builtin.find:
+        paths: "{{ common.logger.output.logDir }}"
+        patterns: general-*
+      register: result
+      when: flush | bool
+
+    - name: Delete old log files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ result.files }}"
+      when: flush | bool
+      notify: Restart Ermes Node
+
+    - name: Clear last log files
       ansible.builtin.copy:
         content: ""
         dest: "{{ item }}"
