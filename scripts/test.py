@@ -165,5 +165,5 @@ if __name__ == "__main__":
     ]
 
     print("Sending parallel requests with different configurations...\n")
-    results = send_parallel_requests(requests_list, max_workers=5)
+    results = send_parallel_requests(requests_list, max_workers=6)
     print_summary(results)
