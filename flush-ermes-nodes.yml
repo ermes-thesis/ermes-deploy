@@ -1,0 +1,13 @@
+- name: Flush Ermes Nodes
+  hosts: nodes
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Flush
+      ansible.builtin.include_tasks: tasks/flush.yml
+      vars:
+        skip_install: true
+
+  handlers:
+    - name: Ermes Node handlers
+      ansible.builtin.import_tasks: handlers/nodes.yml

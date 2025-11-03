@@ -6,54 +6,9 @@
       ansible.builtin.include_tasks: tasks/install_redis.yml
       when: not (skip_install | bool)
 
-    # noqa no-changed-when
-    - name: Flush Redis database (optional)
-      ansible.builtin.command: redis-cli -a "{{ redis_password }}" FLUSHALL
+    - name: Flush
+      ansible.builtin.include_tasks: tasks/flush.yml
       when: flush | bool
-      notify: Restart Ermes Node
-
-    # noqa no-changed-when
-    - name: Drop Redis index (optional)
-      ansible.builtin.command: redis-cli -a "{{ redis_password }}" FT.DROPINDEX metadata_index
-      when: flush | bool
-      notify: Restart Ermes Node
-
-    - name: Ensure directory exists {{ common.logger.output.logDir }}
-      ansible.builtin.file:
-        path: "{{ common.logger.output.logDir }}"
-        state: directory
-        mode: '0755'
-      when: not (skip_install | bool)
-
-    - name: Stop Ermes Node to clear logs
-      ansible.builtin.systemd:
-        name: ermes-node
-        state: stopped
-      when: flush | bool
-
-    - name: Get list of log files
-      ansible.builtin.find:
-        paths: "{{ common.logger.output.logDir }}"
-        patterns: general-*
-      register: result
-      when: flush | bool
-
-    - name: Delete old log files
-      ansible.builtin.file:
-        path: "{{ item.path }}"
-        state: absent
-      with_items: "{{ result.files }}"
-      when: flush | bool
-      notify: Restart Ermes Node
-
-    - name: Clear last log files
-      ansible.builtin.copy:
-        content: ""
-        dest: "{{ item }}"
-        mode: '0755'
-      loop: "{{ log_files }}"
-      when: flush | bool
-      notify: Restart Ermes Node
 
     - name: Write Redis configuration
       ansible.builtin.template:
@@ -139,13 +94,8 @@
       when: not (skip_install | bool)
 
   handlers:
-    - name: Restart redis
-      ansible.builtin.service:
-        name: redis-server
-        state: restarted
+    - name: Common handlers
+      ansible.builtin.import_tasks: handlers/common.yml
 
-    - name: Restart Ermes Node
-      ansible.builtin.systemd:
-        name: ermes-node
-        state: restarted
-        daemon_reload: true
+    - name: Ermes Node handlers
+      ansible.builtin.import_tasks: handlers/nodes.yml

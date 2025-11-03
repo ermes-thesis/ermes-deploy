@@ -1,0 +1,43 @@
+- name: Stop Ermes Node to clear logs
+  ansible.builtin.systemd:
+    name: ermes-node
+    state: stopped
+
+# noqa no-changed-when
+- name: Flush Redis database (optional)
+  ansible.builtin.command: redis-cli -a "{{ redis_password }}" FLUSHALL
+  notify: Restart Ermes Node
+
+# noqa no-changed-when
+- name: Drop Redis index (optional)
+  ansible.builtin.command: redis-cli -a "{{ redis_password }}" FT.DROPINDEX metadata_index
+  notify: Restart Ermes Node
+
+- name: Ensure directory exists {{ common.logger.output.logDir }}
+  ansible.builtin.file:
+    path: "{{ common.logger.output.logDir }}"
+    state: directory
+    mode: '0755'
+  when: not (skip_install | bool)
+  notify: Restart Ermes Node
+
+- name: Get list of log files
+  ansible.builtin.find:
+    paths: "{{ common.logger.output.logDir }}"
+    patterns: general-*
+  register: result
+
+- name: Delete old log files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ result.files }}"
+  notify: Restart Ermes Node
+
+- name: Clear last log files
+  ansible.builtin.copy:
+    content: ""
+    dest: "{{ item }}"
+    mode: '0755'
+  loop: "{{ log_files }}"
+  notify: Restart Ermes Node

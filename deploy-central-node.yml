@@ -149,7 +149,5 @@
         state: restarted
         daemon_reload: true
 
-    - name: Restart redis
-      ansible.builtin.service:
-        name: redis-server
-        state: restarted
+    - name: Common handlers
+      ansible.builtin.import_tasks: handlers/common.yml
