@@ -48,10 +48,14 @@ common:
     leaderThreshold: 5
     followerThreshold: 5
     viewSize: 5
-    idleTimeoutMs: 30000
+    idleTimeoutMs: 1000
     gravityConstant: 9.81
     knownCollectionsDumpPath: /var/log/ermes-node/dump.ndjson
     knownCollectionsDumpInterval: 30s
+    stateful: true
+    isCentralStorage: false
+    weakPolicy: ALWAYSCOPYPOLICY
+    strongPolicy: ERMESPOLICY
   lru:
     size: 10000
     safeLevel: 0.8  

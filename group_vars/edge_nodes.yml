@@ -2,5 +2,5 @@ redis_maxmemory: "256mb"
 
 common:
   lru:
-    size: 1000
+    size: 2000
     safeLevel: 0.8  
