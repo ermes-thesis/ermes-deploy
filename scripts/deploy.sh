@@ -8,6 +8,25 @@ PLAYBOOK="deploy-ermes-nodes.yml"
 TMPDIR="$(mktemp -d)"
 BIN="$TMPDIR/$BIN_NAME"
 
+SKIP_INSTALL=true
+FLUSH=true
+
+for arg in "$@"; do
+  case "$arg" in
+    --install)
+      SKIP_INSTALL=false
+      ;;
+    --no-flush)
+      FLUSH=false
+      ;;
+    *)
+      echo "Usage: $0 [--install] [--no-flush]"
+      exit 1
+      ;;
+  esac
+done
+
+
 log() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 error() { echo -e "\033[1;31m[ERRORE]\033[0m $*" >&2; exit 1; }
 
@@ -29,8 +48,8 @@ tar --sort=name \
 log "Archivio creato: $BIN.tar.xz"
 
 # === Step 3: Deploy con Ansible ===
-log "Deploy con Ansible..."
-ansible-playbook "$PLAYBOOK" -e "bin_path=$BIN" -e "skip_install=true" -e "flush=true"
+log "Deploy con Ansible (skip_install=$SKIP_INSTALL, flush=$FLUSH)..."
+ansible-playbook "$PLAYBOOK" -e "bin_path=$BIN" -e "skip_install=$SKIP_INSTALL" -e "flush=$FLUSH"
 
 # === Step 4: Pulizia ===
 log "Pulizia temporanei..."
