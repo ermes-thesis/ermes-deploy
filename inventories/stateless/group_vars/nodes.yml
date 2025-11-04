@@ -1,0 +1,49 @@
+nodes:
+  - name: "IT"
+    domain: "IT"
+    address: 10.10.101.57
+    is_cloud: true
+    latency_up: 0
+  - name: "Milan"
+    domain: "IT/Milan"
+    address: 10.10.101.56
+    is_cloud: false
+    latency_up: 10
+  - name: "POLIMI"
+    domain: "IT/Milan/POLIMI"
+    address: 10.10.101.54
+    is_cloud: false
+    latency_up: 2
+  - name: "UNIMI"
+    domain: "IT/Milan/UNIMI"
+    address: 10.10.101.53
+    is_cloud: false
+    latency_up: 3
+  - name: "Bocconi"
+    domain: "IT/Milan/Bocconi"
+    address: 10.10.101.52
+    is_cloud: false
+    latency_up: 3
+  - name: "Rome"
+    domain: "IT/Rome"
+    address: 10.10.101.51
+    is_cloud: false
+    latency_up: 7
+  - name: "Palermo"
+    domain: "IT/Palermo"
+    address: 10.10.101.50
+    is_cloud: false
+    latency_up: 1
+  - name: "CENTRAL"
+    domain: "CENTRAL"
+    address: 10.10.101.55
+    is_cloud: true
+    latency_up: 0
+
+common:
+  migrationManager:
+    stateful: false
+    isCentralStorage: false
+    weakPolicy: DONOTHINGPOLICY
+    strongPolicy: DONOTHINGPOLICY
+    centralizedDBName: 10.10.101.55:12345

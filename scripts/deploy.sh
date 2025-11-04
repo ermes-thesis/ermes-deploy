@@ -10,6 +10,7 @@ BIN="$TMPDIR/$BIN_NAME"
 
 SKIP_INSTALL=true
 FLUSH=true
+CENTRAL_STORAGE=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -19,8 +20,11 @@ for arg in "$@"; do
     --no-flush)
       FLUSH=false
       ;;
+    --centralized)
+      CENTRAL_STORAGE=true
+      ;;
     *)
-      echo "Usage: $0 [--install] [--no-flush]"
+      echo "Usage: $0 [--install] [--no-flush] [--centralized]"
       exit 1
       ;;
   esac
@@ -49,7 +53,17 @@ log "Archivio creato: $BIN.tar.xz"
 
 # === Step 3: Deploy con Ansible ===
 log "Deploy con Ansible (skip_install=$SKIP_INSTALL, flush=$FLUSH)..."
-ansible-playbook "$PLAYBOOK" -e "bin_path=$BIN" -e "skip_install=$SKIP_INSTALL" -e "flush=$FLUSH"
+
+if [[ "$CENTRAL_STORAGE" == true ]]; then
+  INVENTORY_OPTS="-i inventories/stateless"
+else
+  INVENTORY_OPTS=""
+fi
+
+ansible-playbook $INVENTORY_OPTS "$PLAYBOOK" \
+  -e "bin_path=$BIN" \
+  -e "skip_install=$SKIP_INSTALL" \
+  -e "flush=$FLUSH"
 
 # === Step 4: Pulizia ===
 log "Pulizia temporanei..."
