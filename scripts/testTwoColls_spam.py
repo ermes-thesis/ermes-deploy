@@ -35,7 +35,7 @@ if __name__ == "__main__":
     
     
     print("\nCreating sequential collection...")
-    result = send_request('http://10.10.101.50:12345/invoke-function/functionCreateSeqCollections','POST',**{'headers': {
+    result = send_request('http://10.10.101.57:12345/invoke-function/functionCreateSeqCollections','POST',**{'headers': {
                 'X-ERMES-GROUPS': token,
                 'X-CLIENT-SECRET': 'client-secret'
             } ,
@@ -45,13 +45,13 @@ if __name__ == "__main__":
     print(f"✓ Contacted node: {result['url'][7:25]} - Status: {result['status_code']} - Time: {result['elapsed_time']:.3f}s, Body: {result['content']}, Execution host: {result["execution_host"]}")
     
     time.sleep(1)
-        
+    
     print('\nUsing collection...')
     requests_list = []
     
     for i in range(300):
         for host in HOSTS:
-            if host == "10.10.101.57" and i > 100:
+            if host == "10.10.101.50" and i > 100:
                 requests_list.append({
                     'url': 'http://' + host + ':12345/invoke-function/functionUseTwoCollections/1.0.1',
                     'method': 'POST',
