@@ -31,8 +31,7 @@ if __name__ == "__main__":
             'json': {
                 'name': colName
             }})
-    print(f"✓ Contacted node: {result['url'][7:25]} - Status: {result['status_code']} - Time: {result['elapsed_time']:.3f}s, Body: {result['content']}, Execution host: {result["execution_host"]}")
-    
+    print_result(result)
     
     print("\nCreating sequential collection...")
     result = send_request('http://10.10.101.57:12345/invoke-function/functionCreateSeqCollections','POST',**{'headers': {
@@ -42,8 +41,7 @@ if __name__ == "__main__":
             'json': {
                 'name': seqColName
             }})
-    print(f"✓ Contacted node: {result['url'][7:25]} - Status: {result['status_code']} - Time: {result['elapsed_time']:.3f}s, Body: {result['content']}, Execution host: {result["execution_host"]}")
-    
+    print_result(result)    
     time.sleep(1)
     
     print('\nUsing collection...')

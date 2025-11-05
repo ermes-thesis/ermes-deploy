@@ -30,7 +30,7 @@ if __name__ == "__main__":
             'json': {
                 'name': colName
             }})
-    print(f"✓ {result['url']} - Status: {result['status_code']} - Time: {result['elapsed_time']:.3f}s, Body: {result['content']}, Execution host: {result["execution_host"]}")    
+    print_result(result)    
     
     print('\nUsing collection...')
     for i in range(20):
@@ -43,5 +43,5 @@ if __name__ == "__main__":
                 'json': {
                'data': 'write number '+ str(i) +" from " + "10.10.101.54",
             }})
-        print(f"✓ {result['url']} - Status: {result['status_code']} - Time: {result['elapsed_time']:.3f}s, Body: {result['content']}, Execution host: {result["execution_host"]}")
+        print_result(result)
         time.sleep(0.5)

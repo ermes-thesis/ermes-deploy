@@ -29,7 +29,7 @@ if __name__ == "__main__":
             'json': {
                 'name': colName
             }})
-    print(f"✓ {result['url']} - Status: {result['status_code']} - Time: {result['elapsed_time']:.3f}s, Body: {result['content']}, Execution host: {result["execution_host"]}")    
+    print_result(result)
     
     print('\nUsing collection...')
     requests_list = [

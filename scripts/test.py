@@ -30,8 +30,7 @@ if __name__ == "__main__":
             'json': {
                 'name': colName
             }})
-    print(res)
-
+    print_result(res)
 
     requests_list = [
         {
