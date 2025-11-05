@@ -24,7 +24,7 @@ for node in "${NODES[@]}"; do
             fi
         fi
 
-        rm "$TARGET_DIR"/general*.log.gz "$TARGET_DIR"/general.log 2>/dev/null || true
+        rm "$TARGET_DIR"/general*.log.gz 2>/dev/null || true
         
         echo "✅ Creato $COMPLETE_FILE"
 
