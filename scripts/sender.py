@@ -97,7 +97,7 @@ def send_request(url: str, method: str = 'GET', **kwargs) -> Dict:
         local = None
         if "X-ERMES-EXECUTION-HOST" in response.headers:
             host = response.headers["X-ERMES-EXECUTION-HOST"]
-            if host in url:
+            if host != "" and host in url:
                 local = True
             else:
                 local = False
