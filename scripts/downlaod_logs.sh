@@ -8,7 +8,27 @@ mkdir -p "$LOCAL_DIR"
 
 echo "🔹 Scarico log..."
 for node in "${NODES[@]}"; do
-    scp -J ubuntu@100.112.91.33 ubuntu@$node:$REMOTE_PATH "$LOCAL_DIR/$node/" && echo "✅ $node" &
+    (
+        TARGET_DIR="$LOCAL_DIR/$node"
+        COMPLETE_FILE="$TARGET_DIR/complete.log"
+
+        scp -J ubuntu@100.112.91.33 "ubuntu@$node:$REMOTE_PATH" "$TARGET_DIR/" >/dev/null 2>&1
+        echo "✅ Scaricati log da $node"
+
+        # Aggiunge i log decompressi
+        if compgen -G "$TARGET_DIR/general-*.log.gz" > /dev/null; then
+            echo "📦 Estrazione log compressi per $node..."
+            gzip -dc "$TARGET_DIR"/general-*.log.gz >> "$COMPLETE_FILE"
+            if [[ -f "$TARGET_DIR/general.log" ]]; then
+                cat "$TARGET_DIR/general.log" >> "$COMPLETE_FILE"
+            fi
+        fi
+
+        rm "$TARGET_DIR"/general*.log.gz "$TARGET_DIR"/general.log 2>/dev/null || true
+        
+        echo "✅ Creato $COMPLETE_FILE"
+
+    ) &
 done
 wait
-echo "✅ Tutti i log scaricati in $LOCAL_DIR/"
+echo "✅ Tutti i log scaricati in $LOCAL_DIR"
