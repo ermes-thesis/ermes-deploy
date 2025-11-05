@@ -19,6 +19,9 @@ common:
     db: 0
     password: very-secure-password
     protocol: 2 
+    startingOpsBackoff: 500ms
+    maxRetries: 10
+    maxOpsBackoff: 2s
   functionsCache:
     binaryCache:
       size: 100
@@ -36,7 +39,13 @@ common:
   scheduler:
     groupTokenProviderAddress: "10.10.101.58"
     groupTokenProviderPort: 8081
-    wasmRuntime: "wasmtime" 
+    wasmRuntime: "wasmtime"
+    startingExecutorsBackoff: 500ms
+    maxExecutorsRetries: 10
+    maxExecutorsBackoff: 5s
+    startingOutdatedDataBackoff: 500ms
+    maxOutdatedDataRetries: 15
+    maxOutdatedDataBackoff: 5s
   groupTokenPublicKeyPath: "/etc/ermes-node/token-public-key.pem"
   logger:
     level: 0

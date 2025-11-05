@@ -41,8 +41,8 @@ nodes:
     latency_up: 1
 
 common:
+  stateful: true
+  isCentralStorage: false
   migrationManager:
-    stateful: true
-    isCentralStorage: false
     weakPolicy: ALWAYSCOPYPOLICY
     strongPolicy: ERMESPOLICY

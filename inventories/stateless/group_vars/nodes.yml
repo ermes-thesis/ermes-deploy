@@ -41,9 +41,9 @@ nodes:
     latency_up: 0
 
 common:
+  stateful: false
+  isCentralStorage: false
   migrationManager:
-    stateful: false
-    isCentralStorage: false
     weakPolicy: DONOTHINGPOLICY
     strongPolicy: DONOTHINGPOLICY
     centralizedDBName: 10.10.101.55:12345

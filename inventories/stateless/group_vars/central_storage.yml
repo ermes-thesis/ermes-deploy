@@ -1,6 +1,6 @@
 common:
+  stateful: true
+  isCentralStorage: true
   migrationManager:
-    stateful: true
-    isCentralStorage: true
     weakPolicy: DONOTHINGPOLICY
     strongPolicy: DONOTHINGPOLICY

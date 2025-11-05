@@ -17,6 +17,8 @@ node:
   port: {{ common.port }}
   secret: "{{ common.secret }}"
   clientSecret: "{{ common.clientSecret }}"
+  stateful: {{ common.stateful }}
+  isCentralStorage: {{ common.isCentralStorage }}
 
 hierarchy:
 {% set parts = node.domain.split('/') %}
@@ -52,7 +54,7 @@ hierarchy:
 {% endfor %}
 
 # === Common config ===
-{% set filtered_common = common | dict2items | rejectattr('key','in',['port','secret','clientSecret']) | list %}
+{% set filtered_common = common | dict2items | rejectattr('key','in',['port','secret','clientSecret', 'stateful', 'isCentralStorage']) | list %}
 {% set filtered_common_dict = {} %}
 {% for item in filtered_common %}
 {% set _ = filtered_common_dict.update({ item.key: item.value }) %}
