@@ -8,37 +8,37 @@ nodes:
     domain: "IT/Milan"
     address: 10.10.101.56
     is_cloud: false
-    latency_up: 10
+    latency_up: 11
   - name: "POLIMI"
     domain: "IT/Milan/POLIMI"
     address: 10.10.101.54
     is_cloud: false
-    latency_up: 2
+    latency_up: 16
   - name: "UNIMI"
     domain: "IT/Milan/UNIMI"
     address: 10.10.101.53
     is_cloud: false
-    latency_up: 3
+    latency_up: 19
   - name: "Bocconi"
     domain: "IT/Milan/Bocconi"
     address: 10.10.101.52
     is_cloud: false
-    latency_up: 3
+    latency_up: 6
   - name: "Rome"
     domain: "IT/Rome"
     address: 10.10.101.55
     is_cloud: false
-    latency_up: 7
+    latency_up: 11
   - name: "LaSapienza"
     domain: "IT/Rome/LaSapienza"
     address: 10.10.101.51
     is_cloud: false
-    latency_up: 1
+    latency_up: 12
   - name: "TorVergata"
     domain: "IT/Rome/TorVergata"
     address: 10.10.101.50
     is_cloud: false
-    latency_up: 1
+    latency_up: 16
 
 common:
   stateful: true
