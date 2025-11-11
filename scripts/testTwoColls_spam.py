@@ -7,7 +7,6 @@ HOSTS = [
     "10.10.101.52",
     "10.10.101.53",
     "10.10.101.54",
-    "10.10.101.57",
 ]
 
 
@@ -34,7 +33,7 @@ if __name__ == "__main__":
     print_result(result)
     
     print("\nCreating sequential collection...")
-    result = send_request('http://10.10.101.57:12345/invoke-function/functionCreateSeqCollections','POST',**{'headers': {
+    result = send_request('http://10.10.101.50:12345/invoke-function/functionCreateSeqCollections','POST',**{'headers': {
                 'X-ERMES-GROUPS': token,
                 'X-CLIENT-SECRET': 'client-secret'
             } ,
@@ -46,10 +45,10 @@ if __name__ == "__main__":
     
     print('\nUsing collection...')
     requests_list = []
-    
-    for i in range(300):
+        
+    for i in range(150):
         for host in HOSTS:
-            if host == "10.10.101.50" and i > 100:
+            if (host == "10.10.101.54" or host == "10.10.101.50") and i > 80:
                 requests_list.append({
                     'url': 'http://' + host + ':12345/invoke-function/functionUseTwoCollections/1.0.1',
                     'method': 'POST',
@@ -79,5 +78,5 @@ if __name__ == "__main__":
                 })
 
     print("Sending parallel requests with different configurations...\n")
-    results = send_parallel_requests(requests_list, max_workers=20)
+    results = send_parallel_requests(requests_list, max_workers=20, delay=1)
     print_summary(results)

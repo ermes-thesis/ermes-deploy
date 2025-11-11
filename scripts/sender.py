@@ -126,7 +126,8 @@ def send_request(url: str, method: str = 'GET', **kwargs) -> Dict:
 
 def send_parallel_requests(
     requests_list: List[Dict],
-    max_workers: int = 10
+    max_workers: int = 10,
+    delay = 0.3
 ) -> List[Dict]:
     """
     Send multiple HTTP requests in parallel with individual configurations.
@@ -156,7 +157,7 @@ def send_parallel_requests(
             method = req_config.pop('method', 'GET')
             def send_and_sleep(url0, method0, **req_config0):
                 res = send_request(url0, method0, **req_config0)
-                time.sleep(0.3)
+                time.sleep(delay)
                 return res
             future = executor.submit(send_and_sleep, url, method, **req_config)
             future_to_config[future] = url
