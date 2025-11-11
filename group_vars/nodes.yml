@@ -3,11 +3,11 @@ common:
   secret: "ermes-secret"  
   clientSecret: "client-secret"  
   migrationManager:
-    leaderThreshold: 5000
-    followerThreshold: 1500
+    leaderThreshold: 300
+    followerThreshold: 150
     viewSize: 5
     idleTimeoutMs: 1000
-    gravityConstant: 3.73
+    gravityConstant: 9.81
     knownCollectionsDumpPath: /var/log/ermes-node/dump.ndjson
     knownCollectionsDumpInterval: 30s
   lru:
