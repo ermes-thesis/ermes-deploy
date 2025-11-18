@@ -1,0 +1,181 @@
+---
+# ============================================================
+# PLAY 1: PREREQUISITI
+# Installa i pacchetti necessari e carica i moduli kernel
+# ============================================================
+- name: "Fase 1: Installazione Pacchetti e Moduli"
+  hosts: nodes
+  become: true
+  gather_facts: false
+  tags: [setup]
+
+  tasks:
+    - name: "Assicura che iproute2 sia installato"
+      ansible.builtin.package:
+        name: iproute2
+        state: present
+
+    - name: "Carica modulo sch_htb"
+      community.general.modprobe:
+        name: sch_htb
+        state: present
+
+# ============================================================
+# PLAY 2: RESET E PREPARAZIONE ROOT
+# Eseguito su TUTTI i nodi PRIMA di applicare regole specifiche.
+# Questo previene che un reset cancelli regole scritte da altri.
+# ============================================================
+- name: "Fase 2: Reset Interfacce e Setup Root HTB"
+  hosts: nodes
+  become: true
+  gather_facts: false
+  tags: [reset]
+
+  vars:
+    interface: "eth0"
+
+  tasks:
+    - name: "Reset della configurazione tc esistente"
+      ansible.builtin.command: "tc qdisc del dev {{ interface }} root"
+      failed_when: false
+      changed_when: false
+
+    - name: "Setup: Crea la radice HTB (1:)"
+      ansible.builtin.command: "tc qdisc replace dev {{ interface }} root handle 1: htb default 10"
+      changed_when: false
+
+    - name: "Setup: Crea classe radice (1:1)"
+      ansible.builtin.command: "tc class replace dev {{ interface }} parent 1: classid 1:1 htb rate 1000mbit"
+      changed_when: false
+
+    - name: "Setup: Crea classe default (1:10)"
+      ansible.builtin.command: "tc class replace dev {{ interface }} parent 1:1 classid 1:10 htb rate 1000mbit"
+      changed_when: false
+
+# ============================================================
+# PLAY 3: APPLICAZIONE REGOLE
+# Applica le regole specifiche nodo per nodo (bidirezionale)
+# ============================================================
+- name: "Fase 3: Applicazione Latenza Bidirezionale"
+  hosts: nodes
+  become: true
+  gather_facts: false
+  tags: [apply]
+
+  vars:
+    interface: "eth0"
+
+  pre_tasks:
+    # Mappa globale per trovare velocemente i nomi inventory dagli IP
+    - name: "Costruisci mappa IP-Inventory"
+      ansible.builtin.set_fact:
+        ip_to_inv_map: "{{ dict(groups['nodes'] | map('extract', hostvars, ['ansible_host']) | zip(groups['nodes'])) }}"
+      # noqa: run-once[task]
+      run_once: true
+      delegate_to: localhost
+
+  tasks:
+    - name: Trova le info del nodo corrente
+      ansible.builtin.set_fact:
+        my_node_info: "{{ nodes | selectattr('address', 'equalto', ansible_host) | first }}"
+
+    # Inizializziamo la variabile parent_inventory_name SEMPRE, per evitare crash su delegate_to
+    - name: "Inizializza variabile target delegato"
+      ansible.builtin.set_fact:
+        target_parent_host: "localhost" # Valore dummy sicuro
+        run_delegated_tasks: false
+
+    # --- CALCOLI E PREPARAZIONE ---
+    - name: "Preparazione dati per nodi figli"
+      when:
+        - my_node_info.latency_up | default(0) | int > 0
+        - "'/' in my_node_info.domain"
+      block:
+        - name: "1. Calcola Latenze e ID"
+          ansible.builtin.set_fact:
+            parent_domain: "{{ my_node_info.domain.rsplit('/', 1)[0] }}"
+            child_ip_octet: "{{ my_node_info.address.split('.')[-1] }}"
+            # Calcolo latenza dispari (es. 5ms -> 2ms locale, 3ms remoto)
+            latency_local: "{{ (my_node_info.latency_up | int / 2) | int }}"
+            latency_remote: "{{ (my_node_info.latency_up | int) - ((my_node_info.latency_up | int / 2) | int) }}"
+
+        - name: "2. Trova Info Parent"
+          ansible.builtin.set_fact:
+            parent_node_info: "{{ nodes | selectattr('domain', 'equalto', parent_domain) | first | default(null) }}"
+
+        - name: "3. Imposta Target per Delegation"
+          # Questo task aggiorna la variabile 'target_parent_host' solo se il parent esiste
+          ansible.builtin.set_fact:
+            target_parent_host: "{{ ip_to_inv_map[parent_node_info.address] }}"
+            parent_ip_octet: "{{ parent_node_info.address.split('.')[-1] }}"
+            run_delegated_tasks: true
+          when:
+            - parent_node_info is defined
+            - parent_node_info is not none
+            - ip_to_inv_map[parent_node_info.address] is defined
+
+        - name: "4. Debug"
+          ansible.builtin.debug:
+            msg: >
+              Io ({{ inventory_hostname }}) applicherò regole su {{ target_parent_host }}.
+              Dati locali (miei): latenza {{ latency_remote }}ms, ID {{ child_ip_octet }}.
+          when: run_delegated_tasks
+
+    # --- APPLICAZIONE REGOLE (Blocchi separati per chiarezza) ---
+
+    # PARTE A: Locale (Sull'host corrente)
+    - name: "Applica regole LOCALI (Upload)"
+      when: run_delegated_tasks
+      block:
+        - name: "UP: Configura classe HTB Locale"
+          ansible.builtin.command: >
+            tc class replace dev {{ interface }} parent 1:1
+            classid 1:10{{ parent_ip_octet }} htb rate 1000mbit
+          changed_when: false
+
+        - name: "UP: Aggiungi ritardo Netem Locale"
+          ansible.builtin.command: >
+            tc qdisc replace dev {{ interface }}
+            parent 1:10{{ parent_ip_octet }} handle 10{{ parent_ip_octet }}:
+            netem delay {{ latency_local }}ms
+          changed_when: false
+
+        - name: "UP: Filtro verso Parent"
+          ansible.builtin.command: >
+            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10
+            u32 match ip dst {{ parent_node_info.address }}/32
+            flowid 1:10{{ parent_ip_octet }}
+          changed_when: false
+
+    # PARTE B: Remota (Usando delegate_to)
+    # Nota: Usiamo 'target_parent_host' che ora è SICURAMENTE definita (o è localhost o è il parent)
+    # Il 'when: run_delegated_tasks' impedisce che venga eseguito su localhost se non serve.
+
+    - name: "Applica regole REMOTE (Download)"
+      when: run_delegated_tasks
+      delegate_to: "{{ target_parent_host }}"
+      block:
+        - name: "DOWN: Configura classe HTB Remota"
+          # Qui siamo sul Parent, ma {{ child_ip_octet }} è la variabile del Figlio (Corretto!)
+          ansible.builtin.shell: >
+            tc class replace dev {{ interface }} parent 1:1
+            classid 1:10{{ child_ip_octet }} htb rate 1000mbit
+          changed_when: false
+
+        - name: "DOWN: Aggiungi ritardo Netem Remoto"
+          # Qui siamo sul Parent, ma {{ latency_remote }} è la variabile del Figlio (Corretto!)
+          ansible.builtin.command: >
+            tc qdisc replace dev {{ interface }}
+            parent 1:10{{ child_ip_octet }} handle 10{{ child_ip_octet }}:
+            netem delay {{ latency_remote }}ms
+          changed_when: false
+
+        - name: "DOWN: Filtro verso Figlio"
+          # Qui siamo sul Parent.
+          # {{ my_node_info.address }} è l'IP del Figlio (perché 'my_node_info' è nel contesto originale).
+          # Questo è esattamente quello che vogliamo: Match DST IP = Figlio.
+          ansible.builtin.command: >
+            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10
+            u32 match ip dst {{ my_node_info.address }}/32
+            flowid 1:10{{ child_ip_octet }}
+          changed_when: false
