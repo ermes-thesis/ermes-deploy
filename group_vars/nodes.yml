@@ -40,10 +40,11 @@ common:
     groupTokenProviderAddress: "10.10.101.58"
     groupTokenProviderPort: 8081
     wasmRuntime: "wasmtime"
-    wasmPoolSize: 20
-    startingExecutorsBackoff: 500ms
-    maxExecutorsRetries: 10
-    maxExecutorsBackoff: 5s
+    wasmPoolConfig:
+      poolSize: 10
+      timeout: 5s
+      withCache: true
+      isAot: false
     startingOutdatedDataBackoff: 500ms
     maxOutdatedDataRetries: 15
     maxOutdatedDataBackoff: 5s
