@@ -2,6 +2,7 @@
   hosts: central_nodes
   become: true
   vars:
+    redis_port: 6380
     minio_root_user: "minioadmin"
     minio_root_password: "minioadmin"
     minio_buckets:
@@ -16,9 +17,10 @@
 
     # noqa no-changed-when
     - name: Flush Redis database (optional)
-      ansible.builtin.command: redis-cli -a "{{ redis_password }}" FLUSHALL
+      ansible.builtin.command: redis-cli -a "{{ redis_password }}" -p {{ redis_port }} FLUSHALL
       when: flush | bool
       notify: Restart central repo
+      failed_when: false
 
     - name: Copy Function registry binary
       ansible.builtin.copy:
@@ -55,6 +57,8 @@
           User=root
           Group=root
 
+          StandardError=append:/frLogs/ermes-function-registry.err.log
+
           [Install]
           WantedBy=multi-user.target
         mode: '0644'
@@ -68,17 +72,8 @@
 
     - name: Install Redis
       ansible.builtin.include_tasks: tasks/install_redis.yml
-
-    - name: Write Redis configuration
-      ansible.builtin.template:
-        src: redis.conf.j2
-        dest: /etc/redis/redis.conf
-        owner: root
-        group: root
-        mode: '0644'
       vars:
         redis_maxmemory: "1gb"
-      notify: Restart redis
 
     - name: Install WasmEdge
       ansible.builtin.include_tasks: "tasks/install_wasmedge.yml"
@@ -116,14 +111,16 @@
         content: |
           [Unit]
           Description=Ermes Central Repo
-          After=network.target redis-server.service
-          Requires=redis-server.service
+          After=network.target redis-{{ redis_port }}.service
+          Requires=redis-{{ redis_port }}.service
 
           [Service]
           ExecStart=/usr/local/bin/ermes-central-repo
           Restart=always
           User=root
           Group=root
+
+          StandardError=append:/gtpLogs/ermes-central-repo.err.log
 
           [Install]
           WantedBy=multi-user.target
@@ -137,6 +134,9 @@
         daemon_reload: true
 
   handlers:
+    - name: Common handlers
+      ansible.builtin.import_tasks: handlers/common.yml
+
     - name: Restart central repo
       ansible.builtin.systemd:
         name: ermes-central-repo
@@ -148,6 +148,3 @@
         name: ermes-function-registry
         state: restarted
         daemon_reload: true
-
-    - name: Common handlers
-      ansible.builtin.import_tasks: handlers/common.yml

@@ -1,6 +1,8 @@
 - name: Deploy Ermes Nodes
   hosts: nodes
   become: true
+  vars:
+    redis_port: "{{ common.redis.port }}"
   tasks:
     - name: Install Redis
       ansible.builtin.include_tasks: tasks/install_redis.yml
@@ -9,16 +11,6 @@
     - name: Flush
       ansible.builtin.include_tasks: tasks/flush.yml
       when: flush | bool
-
-    - name: Write Redis configuration
-      ansible.builtin.template:
-        src: redis.conf.j2
-        dest: /etc/redis/redis.conf
-        owner: root
-        group: root
-        mode: '0644'
-      when: not (skip_install | bool)
-      notify: Restart redis
 
     - name: Install WasmEdge
       ansible.builtin.include_tasks: "tasks/install_wasmedge.yml"
@@ -69,8 +61,8 @@
         content: |
           [Unit]
           Description=Ermes Node
-          After=network.target redis-server.service
-          Requires=redis-server.service
+          After=network.target redis-{{ redis_port }}.service
+          Requires=redis-{{ redis_port }}.service
 
           [Service]
           ExecStart=/usr/local/bin/ermes-node /etc/ermes-node/config.yaml

@@ -1,7 +1,7 @@
 JWT_PEM_PATH: /etc/ermes-cr/private.pem
 JWT_EXPIRATION_TIME: 3600s
 REDIS_ADDR: localhost
-REDIS_PORT: 6379
+REDIS_PORT: 6380
 REDIS_PASSWORD: very-secure-password
 REDIS_DB: 0
 HTTP_PORT: 8081

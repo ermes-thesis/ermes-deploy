@@ -1,40 +1,51 @@
 # Redis configuration managed by Ansible
+# Instance Port: {{ redis_port }}
 
-
+# --- MODULES ---
 # loadmodule /usr/lib/redis/modules/rejson.so
 # loadmodule /usr/lib/redis/modules/redisbloom.so
 # loadmodule /usr/lib/redis/modules/redistimeseries.so
 loadmodule /usr/lib/redis/modules/redisearch.so
 
-dir /var/lib/redis
-
-# Bind address
+# --- NETWORK ---
 {% if redis_bind is defined %}
 bind {{ redis_bind }}
 {% else %}
 bind 127.0.0.1
 {% endif %}
 
-# Port
-{% if redis_port is defined %}
 port {{ redis_port }}
-{% else %}
-port 6379
-{% endif %}
 
-# Protected mode
 {% if redis_protected_mode is defined %}
 protected-mode {{ redis_protected_mode }}
 {% else %}
 protected-mode yes
 {% endif %}
 
-# Authentication
+# --- SYSTEMD & PROCESS MANAGEMENT ---
+supervised systemd
+daemonize no
+
+pidfile /var/run/redis/redis-{{ redis_port }}.pid
+
+# --- LOGGING ---
+{% if redis_logfile is defined and redis_logfile != "" %}
+logfile {{ redis_logfile }}_{{ redis_port }}.log
+{% else %}
+logfile /var/log/redis/redis-{{ redis_port }}.log
+{% endif %}
+
+loglevel notice
+
+# --- DATA STORAGE ---
+dir /var/lib/redis/{{ redis_port }}
+
+# --- AUTHENTICATION ---
 {% if redis_password is defined %}
 requirepass {{ redis_password }}
 {% endif %}
 
-# Memory management
+# --- MEMORY ---
 {% if redis_maxmemory is defined %}
 maxmemory {{ redis_maxmemory }}
 {% endif %}
@@ -43,7 +54,7 @@ maxmemory {{ redis_maxmemory }}
 maxmemory-policy {{ redis_maxmemory_policy }}
 {% endif %}
 
-# Persistence
+# --- PERSISTENCE ---
 {% if redis_save is defined %}
 save {{ redis_save }}
 {% endif %}
@@ -52,27 +63,15 @@ save {{ redis_save }}
 appendonly {{ redis_appendonly }}
 {% endif %}
 
-# Logging
-{% if redis_logfile is defined %}
-logfile {{ redis_logfile }}
-{% else %}
-logfile /var/log/redis/redis-server.log
-{% endif %}
-
-
+# --- TUNING ---
 tcp-backlog 511
 timeout 0
 tcp-keepalive 300
 
-supervised auto
-
-loglevel notice
-
 databases 1
 
 set-proc-title yes
-proc-title-template "{title} {listen-addr} {server-mode}"
+proc-title-template "{title} :{{ redis_port }} {listen-addr} {server-mode}"
 
 locale-collate ""
-
 rdbcompression yes
