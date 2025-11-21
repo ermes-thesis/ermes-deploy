@@ -9,24 +9,26 @@ mkdir -p "$LOCAL_DIR"
 echo "🔹 Scarico log..."
 for node in "${NODES[@]}"; do
     (
+        NODE_ID="${node##*.}"
         TARGET_DIR="$LOCAL_DIR/$node"
-        COMPLETE_FILE="$TARGET_DIR/complete.log"
+        COMPLETE_FILE="$TARGET_DIR/general_$NODE_ID.log"
+        
+        mkdir -p "$TARGET_DIR"
 
         scp -J ubuntu@100.112.91.33 "ubuntu@$node:$REMOTE_PATH" "$TARGET_DIR/" >/dev/null 2>&1
-        echo "✅ Scaricati log da $node"
+        echo "✅ Scaricati file temporanei da $node"
 
-        # Aggiunge i log decompressi
-        if compgen -G "$TARGET_DIR/general-*.log.gz" > /dev/null; then
-            echo "📦 Estrazione log compressi per $node..."
-            gzip -dc "$TARGET_DIR"/general-*.log.gz >> "$COMPLETE_FILE"
-            if [[ -f "$TARGET_DIR/general.log" ]]; then
-                cat "$TARGET_DIR/general.log" >> "$COMPLETE_FILE"
-            fi
+        if compgen -G "$TARGET_DIR/general.log*.gz" > /dev/null; then
+            gzip -dc "$TARGET_DIR"/general.log*.gz >> "$COMPLETE_FILE"
+            rm "$TARGET_DIR"/general.log*.gz
         fi
 
-        rm "$TARGET_DIR"/general*.log.gz 2>/dev/null || true
-        
-        echo "✅ Creato $COMPLETE_FILE"
+        if [[ -f "$TARGET_DIR/general.log" ]]; then
+            cat "$TARGET_DIR/general.log" >> "$COMPLETE_FILE"
+            rm "$TARGET_DIR/general.log"
+        fi
+
+        echo "✅ Generato $COMPLETE_FILE"
 
     ) &
 done
