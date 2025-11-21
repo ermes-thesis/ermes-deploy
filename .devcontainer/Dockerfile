@@ -8,5 +8,6 @@ RUN pipx install ansible-lint
 RUN pipx ensurepath
 
 RUN /root/.local/bin/ansible-galaxy role install ricsanfre.minio
+RUN /root/.local/bin/ansible-galaxy collection install community.general
 
 ENV LC_ALL="C.UTF-8"

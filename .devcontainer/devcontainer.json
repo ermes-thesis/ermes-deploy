@@ -9,7 +9,8 @@
         "source=${localWorkspaceFolder}/../ermes-common,target=/workspaces/ermes-common,type=bind",
         "source=${localWorkspaceFolder}/../ermes-central-repo,target=/workspaces/ermes-central-repo,type=bind",
         "source=${localWorkspaceFolder}/../ermes-function-registry,target=/workspaces/ermes-function-registry,type=bind",
-        "source=${localWorkspaceFolder}/../ermes-generic-node,target=/workspaces/ermes-generic-node,type=bind"
+        "source=${localWorkspaceFolder}/../ermes-generic-node,target=/workspaces/ermes-generic-node,type=bind",
+        "source=${localWorkspaceFolder}/../ermes-client-library,target=/workspaces/ermes-client-library,type=bind"
     ],
     "postCreateCommand": "chmod -R 755 /workspaces",
     "customizations": {
