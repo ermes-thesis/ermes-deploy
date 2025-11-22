@@ -2,6 +2,8 @@
   hosts: nodes
   become: true
   gather_facts: false
+  vars:
+    redis_port: 6379
   tasks:
     - name: Flush
       ansible.builtin.include_tasks: tasks/flush.yml
