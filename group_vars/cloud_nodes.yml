@@ -1,1 +1,9 @@
 redis_maxmemory: "4gb"
+
+common:
+  lru:
+    size: 100000000000
+    safeLevel: 0.8
+  scheduler:
+    wasmPoolConfig:
+      poolSize: 50
