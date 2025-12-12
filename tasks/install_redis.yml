@@ -21,7 +21,7 @@
 - name: Install Redis package
   ansible.builtin.apt:
     name: redis
-    state: present
+    state: latest
     update_cache: true
 
 # 2. Disabilitazione del servizio default (quello creato da APT)
