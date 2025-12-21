@@ -28,7 +28,7 @@ nodes:
     domain: "IT/Rome"
     address: 10.10.101.55
     is_cloud: false
-    latency_up: 11
+    latency_up: 15
   - name: "LaSapienza"
     domain: "IT/Rome/LaSapienza"
     address: 10.10.101.51

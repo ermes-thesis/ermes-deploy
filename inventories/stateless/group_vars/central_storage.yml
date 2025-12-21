@@ -1,4 +1,7 @@
 common:
+  lru:
+    size: 100000000000
+    safeLevel: 0.8
   stateful: true
   isCentralStorage: true
   migrationManager:

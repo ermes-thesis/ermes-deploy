@@ -2,8 +2,9 @@ redis_maxmemory: "512mb"
 
 common:
   lru:
-    size: 100000
+    size: 150000
     safeLevel: 0.8
   scheduler:
     wasmPoolConfig:
-      poolSize: 25
+      poolSize: 1000
+      cacheSize: 1000
