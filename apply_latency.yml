@@ -23,7 +23,6 @@
 # ============================================================
 # PLAY 2: RESET E PREPARAZIONE ROOT
 # Eseguito su TUTTI i nodi PRIMA di applicare regole specifiche.
-# Questo previene che un reset cancelli regole scritte da altri.
 # ============================================================
 - name: "Fase 2: Reset Interfacce e Setup Root HTB"
   hosts: nodes
@@ -53,10 +52,9 @@
       changed_when: false
 
 # ============================================================
-# PLAY 3: APPLICAZIONE REGOLE
-# Applica le regole specifiche nodo per nodo (bidirezionale)
+# PLAY 3: APPLICAZIONE REGOLE COMPLESSE
 # ============================================================
-- name: "Fase 3: Applicazione Latenza Bidirezionale"
+- name: "Fase 3: Applicazione Latenze (Parent, Cloud, Storage)"
   hosts: nodes
   become: true
   gather_facts: false
@@ -66,116 +64,160 @@
     interface: "eth0"
 
   pre_tasks:
-    # Mappa globale per trovare velocemente i nomi inventory dagli IP
-    - name: "Costruisci mappa IP-Inventory"
+    # Calcoliamo la mappa su ogni host per sicurezza (veloce e robusto)
+    - name: "Costruisci mappa IP-Inventory e definisci Nodi Speciali"
       ansible.builtin.set_fact:
         ip_to_inv_map: "{{ dict(groups['nodes'] | map('extract', hostvars, ['ansible_host']) | zip(groups['nodes'])) }}"
-      # noqa: run-once[task]
-      run_once: true
-      delegate_to: localhost
+        # Identifica nodo Cloud (IT) e Storage
+        cloud_node_info: "{{ nodes | selectattr('domain', 'equalto', 'IT') | first }}"
+        storage_node_info: "{{ nodes | selectattr('domain', 'equalto', 'central-storage') | first }}"
 
   tasks:
     - name: Trova le info del nodo corrente
       ansible.builtin.set_fact:
         my_node_info: "{{ nodes | selectattr('address', 'equalto', ansible_host) | first }}"
 
-    # Inizializziamo la variabile parent_inventory_name SEMPRE, per evitare crash su delegate_to
-    - name: "Inizializza variabile target delegato"
+    # --------------------------------------------------------
+    # CALCOLO LATENZA CUMULATIVA (Somma latenze verso la radice)
+    # --------------------------------------------------------
+    - name: "Calcola Latenza Totale verso Cloud (Edge -> Mid -> Cloud)"
       ansible.builtin.set_fact:
-        target_parent_host: "localhost" # Valore dummy sicuro
-        run_delegated_tasks: false
+        accumulated_latency: >-
+          {% set ns = namespace(lat=0, current_domain=my_node_info.domain) %}
+          {% for i in range(10) %}
+             {% if ns.current_domain != '' %}
+                 {# Cerca il nodo corrispondente al dominio corrente #}
+                 {% set curr_nodes = nodes | selectattr('domain', 'equalto', ns.current_domain) | list %}
+                 {% if curr_nodes | length > 0 %}
+                     {% set curr = curr_nodes[0] %}
+                     {% set ns.lat = ns.lat + (curr.latency_up | int) %}
+                     {# Logica per risalire #}
+                     {% if '/' in ns.current_domain %}
+                         {% set ns.current_domain = ns.current_domain.rsplit('/', 1)[0] %}
+                     {% else %}
+                         {# Siamo in cima (es. IT), stop #}
+                         {% set ns.current_domain = '' %}
+                     {% endif %}
+                 {% else %}
+                     {# Dominio non trovato #}
+                     {% set ns.current_domain = '' %}
+                 {% endif %}
+             {% endif %}
+          {% endfor %}
+          {{ ns.lat | int }}
 
-    # --- CALCOLI E PREPARAZIONE ---
-    - name: "Preparazione dati per nodi figli"
+    # --------------------------------------------------------
+    # PREPARAZIONE VARIABILI
+    # --------------------------------------------------------
+    - name: "Prepara variabili ID e Parent"
+      ansible.builtin.set_fact:
+        my_ip_octet: "{{ my_node_info.address.split('.')[-1] }}"
+        parent_domain: "{{ my_node_info.domain.rsplit('/', 1)[0] | default('') }}"
+
+    - name: "Trova Info Parent Diretto"
+      ansible.builtin.set_fact:
+        parent_node_info: "{{ nodes | selectattr('domain', 'equalto', parent_domain) | first | default(null) }}"
+      when: "'/' in my_node_info.domain"
+
+    # ========================================================
+    # PARTE 1: REGOLA VERSO PARENT DIRETTO
+    # Handle: 1:10xx
+    # ========================================================
+    - name: "APPLICAZIONE: Nodo -> Parent (Esistente)"
       when:
-        - my_node_info.latency_up | default(0) | int > 0
-        - "'/' in my_node_info.domain"
+        - parent_node_info is defined
+        - parent_node_info is not none
+      vars:
+        # FIX SICUREZZA: Evita crash se parent_node_info è undefined
+        target_inv: "{{ ip_to_inv_map[parent_node_info.address] if (parent_node_info is defined and parent_node_info) else 'localhost' }}"
+        lat_local: "{{ (my_node_info.latency_up | int / 2) | int }}"
+        lat_remote: "{{ (my_node_info.latency_up | int) - ((my_node_info.latency_up | int / 2) | int) }}"
+        handle_prefix: "10"
       block:
-        - name: "1. Calcola Latenze e ID"
-          ansible.builtin.set_fact:
-            parent_domain: "{{ my_node_info.domain.rsplit('/', 1)[0] }}"
-            child_ip_octet: "{{ my_node_info.address.split('.')[-1] }}"
-            # Calcolo latenza dispari (es. 5ms -> 2ms locale, 3ms remoto)
-            latency_local: "{{ (my_node_info.latency_up | int / 2) | int }}"
-            latency_remote: "{{ (my_node_info.latency_up | int) - ((my_node_info.latency_up | int / 2) | int) }}"
-
-        - name: "2. Trova Info Parent"
-          ansible.builtin.set_fact:
-            parent_node_info: "{{ nodes | selectattr('domain', 'equalto', parent_domain) | first | default(null) }}"
-
-        - name: "3. Imposta Target per Delegation"
-          # Questo task aggiorna la variabile 'target_parent_host' solo se il parent esiste
-          ansible.builtin.set_fact:
-            target_parent_host: "{{ ip_to_inv_map[parent_node_info.address] }}"
-            parent_ip_octet: "{{ parent_node_info.address.split('.')[-1] }}"
-            run_delegated_tasks: true
-          when:
-            - parent_node_info is defined
-            - parent_node_info is not none
-            - ip_to_inv_map[parent_node_info.address] is defined
-
-        - name: "4. Debug"
-          ansible.builtin.debug:
-            msg: >
-              Io ({{ inventory_hostname }}) applicherò regole su {{ target_parent_host }}.
-              Dati locali (miei): latenza {{ latency_remote }}ms, ID {{ child_ip_octet }}.
-          when: run_delegated_tasks
-
-    # --- APPLICAZIONE REGOLE (Blocchi separati per chiarezza) ---
-
-    # PARTE A: Locale (Sull'host corrente)
-    - name: "Applica regole LOCALI (Upload)"
-      when: run_delegated_tasks
-      block:
-        - name: "UP: Configura classe HTB Locale"
-          ansible.builtin.command: >
-            tc class replace dev {{ interface }} parent 1:1
-            classid 1:10{{ parent_ip_octet }} htb rate 1000mbit
-          changed_when: false
-
-        - name: "UP: Aggiungi ritardo Netem Locale"
-          ansible.builtin.command: >
-            tc qdisc replace dev {{ interface }}
-            parent 1:10{{ parent_ip_octet }} handle 10{{ parent_ip_octet }}:
-            netem delay {{ latency_local }}ms
-          changed_when: false
-
-        - name: "UP: Filtro verso Parent"
-          ansible.builtin.command: >
-            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10
-            u32 match ip dst {{ parent_node_info.address }}/32
-            flowid 1:10{{ parent_ip_octet }}
-          changed_when: false
-
-    # PARTE B: Remota (Usando delegate_to)
-    # Nota: Usiamo 'target_parent_host' che ora è SICURAMENTE definita (o è localhost o è il parent)
-    # Il 'when: run_delegated_tasks' impedisce che venga eseguito su localhost se non serve.
-
-    - name: "Applica regole REMOTE (Download)"
-      when: run_delegated_tasks
-      delegate_to: "{{ target_parent_host }}"
-      block:
-        - name: "DOWN: Configura classe HTB Remota"
-          # Qui siamo sul Parent, ma {{ child_ip_octet }} è la variabile del Figlio (Corretto!)
+        - name: "UP (Parent): Configura regola locale"
+          vars:
+            p_octet: "{{ parent_node_info.address.split('.')[-1] if (parent_node_info is defined and parent_node_info) else '0' }}"
           ansible.builtin.shell: >
-            tc class replace dev {{ interface }} parent 1:1
-            classid 1:10{{ child_ip_octet }} htb rate 1000mbit
+            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ p_octet }} htb rate 1000mbit &&
+            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ p_octet }} handle {{ handle_prefix }}{{ p_octet }}: netem delay {{ lat_local }}ms &&
+            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ parent_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ p_octet }}
           changed_when: false
 
-        - name: "DOWN: Aggiungi ritardo Netem Remoto"
-          # Qui siamo sul Parent, ma {{ latency_remote }} è la variabile del Figlio (Corretto!)
-          ansible.builtin.command: >
-            tc qdisc replace dev {{ interface }}
-            parent 1:10{{ child_ip_octet }} handle 10{{ child_ip_octet }}:
-            netem delay {{ latency_remote }}ms
+        - name: "DOWN (Parent): Delega regola su Parent"
+          delegate_to: "{{ target_inv }}"
+          vars:
+            child_octet: "{{ my_ip_octet }}"
+          ansible.builtin.shell: >
+            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ child_octet }} htb rate 1000mbit &&
+            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ child_octet }} handle {{ handle_prefix }}{{ child_octet }}: netem delay {{ lat_remote }}ms &&
+            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ my_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ child_octet }}
           changed_when: false
 
-        - name: "DOWN: Filtro verso Figlio"
-          # Qui siamo sul Parent.
-          # {{ my_node_info.address }} è l'IP del Figlio (perché 'my_node_info' è nel contesto originale).
-          # Questo è esattamente quello che vogliamo: Match DST IP = Figlio.
-          ansible.builtin.command: >
-            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10
-            u32 match ip dst {{ my_node_info.address }}/32
-            flowid 1:10{{ child_ip_octet }}
+    # ========================================================
+    # PARTE 2: REGOLA VERSO CLOUD (Edge -> ... -> Cloud)
+    # Handle: 1:20xx (Offset 20)
+    # Si applica SOLO se il Parent NON è già il Cloud
+    # ========================================================
+    - name: "APPLICAZIONE: Nodo -> Cloud (Diretto Overlay)"
+      when:
+        - cloud_node_info is defined
+        - my_node_info.address != cloud_node_info.address
+        - (parent_node_info is not defined) or (parent_node_info.address != cloud_node_info.address)
+      vars:
+        target_inv: "{{ ip_to_inv_map[cloud_node_info.address] }}"
+        lat_total: "{{ accumulated_latency | int }}"
+        lat_local: "{{ (lat_total | int / 2) | int }}"
+        lat_remote: "{{ (lat_total | int) - ((lat_total | int / 2) | int) }}"
+        handle_prefix: "20"
+        target_octet: "{{ cloud_node_info.address.split('.')[-1] }}"
+      block:
+        - name: "UP (Cloud): Configura regola verso Cloud Root"
+          ansible.builtin.shell: >
+            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ target_octet }} htb rate 1000mbit &&
+            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ target_octet }} handle {{ handle_prefix }}{{ target_octet }}: netem delay {{ lat_local }}ms &&
+            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ cloud_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ target_octet }}
+          changed_when: false
+
+        - name: "DOWN (Cloud): Delega regola su Cloud Root"
+          delegate_to: "{{ target_inv }}"
+          vars:
+            child_octet: "{{ my_ip_octet }}"
+          ansible.builtin.shell: >
+            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ child_octet }} htb rate 1000mbit &&
+            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ child_octet }} handle {{ handle_prefix }}{{ child_octet }}: netem delay {{ lat_remote }}ms &&
+            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ my_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ child_octet }}
+          changed_when: false
+
+    # ========================================================
+    # PARTE 3: REGOLA VERSO CENTRAL STORAGE
+    # Handle: 1:30xx (Offset 30)
+    # Latenza = Latenza Cloud (accumulata) + 2ms
+    # ========================================================
+    - name: "APPLICAZIONE: Nodo -> Central Storage"
+      when:
+        - storage_node_info is defined
+        - my_node_info.address != storage_node_info.address
+      vars:
+        target_inv: "{{ ip_to_inv_map[storage_node_info.address] }}"
+        lat_total: "{{ (accumulated_latency | int) + 2 }}"
+        lat_local: "{{ (lat_total | int / 2) | int }}"
+        lat_remote: "{{ (lat_total | int) - ((lat_total | int / 2) | int) }}"
+        handle_prefix: "30"
+        target_octet: "{{ storage_node_info.address.split('.')[-1] }}"
+      block:
+        - name: "UP (Storage): Configura regola verso Storage"
+          ansible.builtin.shell: >
+            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ target_octet }} htb rate 1000mbit &&
+            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ target_octet }} handle {{ handle_prefix }}{{ target_octet }}: netem delay {{ lat_local }}ms &&
+            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ storage_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ target_octet }}
+          changed_when: false
+
+        - name: "DOWN (Storage): Delega regola su Storage Node"
+          delegate_to: "{{ target_inv }}"
+          vars:
+            child_octet: "{{ my_ip_octet }}"
+          ansible.builtin.shell: >
+            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ child_octet }} htb rate 1000mbit &&
+            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ child_octet }} handle {{ handle_prefix }}{{ child_octet }}: netem delay {{ lat_remote }}ms &&
+            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ my_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ child_octet }}
           changed_when: false
