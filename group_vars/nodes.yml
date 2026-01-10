@@ -10,7 +10,8 @@ common:
     gravityConstant: 9.81
     knownCollectionsDumpPath: /var/log/ermes-node/dump.ndjson
     knownCollectionsDumpInterval: 7s
-    weakCollectionSendingThreshold: 0.7
+    weakCollectionSendingThreshold: 0.1
+    # weakCollectionSendingThreshold: 0.7
   redis:
     address: "localhost"
     port: 6379

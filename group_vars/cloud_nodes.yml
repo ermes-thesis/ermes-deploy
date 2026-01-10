@@ -6,5 +6,5 @@ common:
     safeLevel: 0.8
   scheduler:
     wasmPoolConfig:
-      poolSize: 5000
-      cacheSize: 5000
+      poolSize: 1000
+      cacheSize: 1000
