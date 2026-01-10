@@ -65,13 +65,11 @@
 
   pre_tasks:
     # Calcoliamo la mappa su ogni host per sicurezza (veloce e robusto)
-    - name: "Costruisci mappa IP-Inventory e definisci Nodi Speciali"
+    - name: "Costruisci mappa IP-Inventory e definisci IP Speciali"
       ansible.builtin.set_fact:
         ip_to_inv_map: "{{ dict(groups['nodes'] | map('extract', hostvars, ['ansible_host']) | zip(groups['nodes'])) }}"
-        # Identifica nodo Cloud (IT) e Storage
-        cloud_node_info: "{{ nodes | selectattr('domain', 'equalto', 'IT') | first }}"
-        storage_node_info: "{{ nodes | selectattr('domain', 'equalto', 'central-storage') | first }}"
-
+        cloud_ip: "{{ hostvars[groups['cloud_nodes'][0]]['ansible_host'] }}"
+        central_node_ip: "{{ hostvars[groups['central_nodes'][0]]['ansible_host'] }}"
   tasks:
     - name: Trova le info del nodo corrente
       ansible.builtin.set_fact:
@@ -160,22 +158,22 @@
     # ========================================================
     - name: "APPLICAZIONE: Nodo -> Cloud (Diretto Overlay)"
       when:
-        - cloud_node_info is defined
-        - my_node_info.address != cloud_node_info.address
-        - (parent_node_info is not defined) or (parent_node_info.address != cloud_node_info.address)
+        - cloud_ip is defined
+        - my_node_info.address != cloud_ip
+        - (parent_node_info is not defined) or (parent_node_info.address != cloud_ip)
       vars:
-        target_inv: "{{ ip_to_inv_map[cloud_node_info.address] }}"
+        target_inv: "{{ ip_to_inv_map[cloud_ip] }}"
         lat_total: "{{ accumulated_latency | int }}"
         lat_local: "{{ (lat_total | int / 2) | int }}"
         lat_remote: "{{ (lat_total | int) - ((lat_total | int / 2) | int) }}"
         handle_prefix: "20"
-        target_octet: "{{ cloud_node_info.address.split('.')[-1] }}"
+        target_octet: "{{ cloud_ip.split('.')[-1] }}"
       block:
         - name: "UP (Cloud): Configura regola verso Cloud Root"
           ansible.builtin.shell: >
             tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ target_octet }} htb rate 1000mbit &&
             tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ target_octet }} handle {{ handle_prefix }}{{ target_octet }}: netem delay {{ lat_local }}ms &&
-            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ cloud_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ target_octet }}
+            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ cloud_ip }}/32 flowid 1:{{ handle_prefix }}{{ target_octet }}
           changed_when: false
 
         - name: "DOWN (Cloud): Delega regola su Cloud Root"
@@ -195,21 +193,21 @@
     # ========================================================
     - name: "APPLICAZIONE: Nodo -> Central Storage"
       when:
-        - storage_node_info is defined
-        - my_node_info.address != storage_node_info.address
+        - central_node_ip is defined
+        - my_node_info.address != central_node_ip
       vars:
-        target_inv: "{{ ip_to_inv_map[storage_node_info.address] }}"
+        target_inv: "{{ ip_to_inv_map[central_node_ip] }}"
         lat_total: "{{ (accumulated_latency | int) + 2 }}"
         lat_local: "{{ (lat_total | int / 2) | int }}"
         lat_remote: "{{ (lat_total | int) - ((lat_total | int / 2) | int) }}"
         handle_prefix: "30"
-        target_octet: "{{ storage_node_info.address.split('.')[-1] }}"
+        target_octet: "{{ central_node_ip.split('.')[-1] }}"
       block:
         - name: "UP (Storage): Configura regola verso Storage"
           ansible.builtin.shell: >
             tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ target_octet }} htb rate 1000mbit &&
             tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ target_octet }} handle {{ handle_prefix }}{{ target_octet }}: netem delay {{ lat_local }}ms &&
-            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ storage_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ target_octet }}
+            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ central_node_ip }}/32 flowid 1:{{ handle_prefix }}{{ target_octet }}
           changed_when: false
 
         - name: "DOWN (Storage): Delega regola su Storage Node"
