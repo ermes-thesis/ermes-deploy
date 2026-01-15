@@ -18,9 +18,9 @@ common:
     db: 0
     password: very-secure-password
     protocol: 2 
-    startingOpsBackoff: 500ms
+    startingOpsBackoff: 10ms
     maxRetries: 10
-    maxOpsBackoff: 2s
+    maxOpsBackoff: 500ms
   functionsCache:
     binaryCache:
       size: 100
@@ -45,9 +45,9 @@ common:
       withCache: 2
       cacheSize: 50
       isAot: false
-    startingOutdatedDataBackoff: 500ms
+    startingOutdatedDataBackoff: 10ms
     maxOutdatedDataRetries: 15
-    maxOutdatedDataBackoff: 5s
+    maxOutdatedDataBackoff: 2s
   groupTokenPublicKeyPath: "/etc/ermes-node/token-public-key.pem"
   logger:
     level: 2
