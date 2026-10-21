@@ -1,0 +1,110 @@
+---
+- name: Deploy isolated Ermes heterogeneous test
+  hosts: nodes
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+    - ../group_vars/nodes.yml
+    - group_vars/all.yml
+  vars:
+    docker_compose_dir: /opt/ermes-test
+    ermes_install_dir: /opt/ermes-test/bin
+    ermes_config_dir: /etc/ermes-test
+    ermes_log_dir: /var/log/ermes-test
+    ermes_binary: "{{ ermes_binary_amd64 if 'cloud_nodes' in group_names else ermes_binary_arm64 }}"
+  tasks:
+    - name: Install container runtime
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+        state: present
+        update_cache: true
+
+    - name: Enable container runtime
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create deployment directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ docker_compose_dir }}"
+        - "{{ ermes_install_dir }}"
+        - "{{ ermes_config_dir }}"
+        - "{{ ermes_log_dir }}"
+
+    - name: Copy dependency compose file
+      ansible.builtin.template:
+        src: compose.yml.j2
+        dest: "{{ docker_compose_dir }}/compose.yml"
+        mode: "0644"
+
+    - name: Start containerized dependencies
+      ansible.builtin.command:
+        cmd: docker compose up -d
+        chdir: "{{ docker_compose_dir }}"
+      changed_when: false
+
+    - name: Copy Ermes node executable
+      ansible.builtin.copy:
+        src: "{{ ermes_binary }}"
+        dest: "{{ ermes_install_dir }}/ermes-node"
+        mode: "0755"
+      notify: Restart Ermes test node
+
+    - name: Copy group token public key
+      ansible.builtin.copy:
+        src: "{{ ermes_public_key }}"
+        dest: "{{ ermes_config_dir }}/token-public-key.pem"
+        mode: "0644"
+      notify: Restart Ermes test node
+
+    - name: Render Ermes node configuration
+      ansible.builtin.template:
+        src: node.conf.j2
+        dest: "{{ ermes_config_dir }}/config.yaml"
+        mode: "0644"
+      notify: Restart Ermes test node
+
+    - name: Create Ermes test node service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ermes-test-node.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Ermes isolated test node
+          After=network-online.target docker.service
+          Wants=network-online.target
+          Requires=docker.service
+
+          [Service]
+          ExecStart={{ ermes_install_dir }}/ermes-node {{ ermes_config_dir }}/config.yaml
+          Restart=always
+          RestartSec=3
+          User=root
+          Group=root
+          StandardOutput=append:{{ ermes_log_dir }}/ermes-node.out.log
+          StandardError=append:{{ ermes_log_dir }}/ermes-node.err.log
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart Ermes test node
+
+    - name: Enable and start Ermes test node
+      ansible.builtin.systemd:
+        name: ermes-test-node
+        state: started
+        enabled: true
+        daemon_reload: true
+
+  handlers:
+    - name: Restart Ermes test node
+      ansible.builtin.systemd:
+        name: ermes-test-node
+        state: restarted
+        daemon_reload: true

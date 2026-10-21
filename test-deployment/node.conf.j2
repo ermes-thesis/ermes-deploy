@@ -1,0 +1,48 @@
+{% set node = (nodes | selectattr("address", "equalto", ansible_host) | list | first) %}
+node:
+  name: "{{ node.address }}:{{ common.port }}"
+  domain: "{{ node.domain }}"
+  address: "{{ node.address }}"
+  port: {{ common.port }}
+  secret: "{{ common.secret }}"
+  clientSecret: "{{ common.clientSecret }}"
+  stateful: {{ common.stateful }}
+  isCentralStorage: {{ common.isCentralStorage }}
+
+hierarchy:
+{% set parts = node.domain.split('/') %}
+{% if parts | length > 1 %}
+{% set father_domain = parts[:-1] | join('/') %}
+{% set father_node = nodes | selectattr("domain", "equalto", father_domain) | first %}
+  father:
+    address: "{{ father_node.address }}:{{ common.port }}"
+    domain: "{{ father_node.domain }}"
+    latency_up: {{ node.latency_up }}
+{% endif %}
+{% set cloud_node = nodes | selectattr("is_cloud", "equalto", true) | first %}
+  cloud:
+    address: "{{ cloud_node.address }}:{{ common.port }}"
+    domain: "{{ cloud_node.domain }}"
+{% set children = nodes | selectattr("domain", "match", "^" ~ node.domain ~ "/[^/]+$") | list %}
+  children:
+{% if children %}
+{% for child in children | sort(attribute="latency_up") %}
+    - address: "{{ child.address }}:{{ common.port }}"
+      domain: "{{ child.domain }}"
+      latency_up: {{ child.latency_up }}
+{% endfor %}
+{% else %}
+    []
+{% endif %}
+  existingDomains:
+{% for n in nodes | sort(attribute="domain") %}
+    - "{{ n.domain }}"
+{% endfor %}
+
+{% set filtered_common = common | dict2items | rejectattr("key", "in", ["port", "secret", "clientSecret", "stateful", "isCentralStorage"]) | list %}
+{% set filtered_common_dict = {} %}
+{% for item in filtered_common %}
+{% set _ = filtered_common_dict.update({item.key: item.value}) %}
+{% endfor %}
+{{ filtered_common_dict | to_nice_yaml(indent=2) }}
+

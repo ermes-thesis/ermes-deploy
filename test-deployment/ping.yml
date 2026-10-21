@@ -1,0 +1,7 @@
+---
+- name: Ping the two heterogeneous Ermes test nodes
+  hosts: nodes
+  gather_facts: false
+  tasks:
+    - name: Verify Ansible connectivity
+      ansible.builtin.ping:

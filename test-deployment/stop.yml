@@ -1,0 +1,29 @@
+---
+- name: Stop isolated Ermes heterogeneous test
+  hosts: nodes
+  become: true
+  vars:
+    docker_compose_dir: /opt/ermes-test
+    purge_volumes: false
+  tasks:
+    - name: Stop and disable Ermes test node
+      ansible.builtin.systemd:
+        name: ermes-test-node
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: Stop and remove dependency containers
+      ansible.builtin.command:
+        cmd: >-
+          docker compose down --remove-orphans
+          {{ '--volumes' if purge_volumes | bool else '' }}
+        chdir: "{{ docker_compose_dir }}"
+      register: compose_down
+      changed_when: >-
+        'Removed' in compose_down.stdout or
+        'Stopping' in compose_down.stdout or
+        'Removing' in compose_down.stdout
+      failed_when:
+        - compose_down.rc != 0
+        - "'no configuration file provided' not in compose_down.stderr"
