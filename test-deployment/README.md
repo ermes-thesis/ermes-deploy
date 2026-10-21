@@ -13,6 +13,8 @@ images are selected by Docker's multi-platform resolver:
 The topology used by the node configuration is defined locally in
 [`group_vars/all.yml`](./group_vars/all.yml), so this deployment does not
 depend on the separate heterogeneous inventory variable files.
+The inventory keeps the Raspberry SSH alias (`sola-pi`) separate from its
+numeric Ermes topology address through `node_address`.
 
 The amd64 Ermes executable is built from `../../ermes-generic-node`. The ARM64
 executable defaults to the verified path
@@ -53,6 +55,12 @@ If `docker info` reports a permission error, the host Docker group/socket
 permissions must be fixed by an administrator; the playbook intentionally does
 not attempt that privileged change.
 
+The MinIO image can be overridden with `-e minio_image=...`; it defaults to
+`docker.io/minio/minio:latest`. Test registry access independently with
+`docker pull docker.io/minio/minio:latest` or provide an image from a registry
+available to the hardware. An authentication or registry-policy failure is
+external to Ansible and prevents Compose from starting all services.
+
 ## Run
 
 First test local and SSH connectivity to both nodes:
@@ -76,10 +84,9 @@ ANSIBLE_CONFIG=test-deployment/ansible.cfg \
   ansible-playbook -i test-deployment/inventory.ini test-deployment/stop.yml
 ```
 
-The stop playbook also disables the Ermes systemd service so it does not start
-again automatically. The Docker service itself is not stopped because it is
-the host container runtime. To remove the persisted Redis and MinIO data
-volumes as well, use:
+The stop playbook removes the Compose containers. The Docker service itself is
+not stopped because it is the host container runtime. To remove the persisted
+Redis and MinIO data volumes as well, use:
 
 ```bash
 ANSIBLE_CONFIG=test-deployment/ansible.cfg \

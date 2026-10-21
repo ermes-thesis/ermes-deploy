@@ -41,6 +41,14 @@
         dest: "{{ ermes_config_dir }}/token-public-key.pem"
         mode: "0644"
 
+    - name: Validate Ermes topology address
+      ansible.builtin.assert:
+        that:
+          - node_address in (nodes | map(attribute="address") | list)
+        fail_msg: >-
+          No topology entry matches node_address={{ node_address }} for
+          {{ inventory_hostname }}. Set node_address in inventory.ini.
+
     - name: Render Ermes node configuration
       ansible.builtin.template:
         src: node.conf.j2

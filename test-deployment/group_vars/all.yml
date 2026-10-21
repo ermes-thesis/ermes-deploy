@@ -4,6 +4,7 @@ ermes_binary_arm64: "{{ playbook_dir }}/../../ermes-compilation/aarch64/main-aar
 ermes_public_key: "{{ playbook_dir }}/../../ermes-generic-node/keys/public.pem"
 minio_root_user: "minioadmin"
 minio_root_password: "minioadmin"
+minio_image: "docker.io/minio/minio:latest"
 
 nodes:
   - name: "SOLA4"

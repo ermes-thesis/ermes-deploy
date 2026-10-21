@@ -21,7 +21,7 @@ services:
 
 {% if 'cloud_nodes' in group_names %}
   minio:
-    image: minio/minio:latest
+    image: "{{ minio_image }}"
     container_name: ermes-test-minio
     restart: unless-stopped
     network_mode: host

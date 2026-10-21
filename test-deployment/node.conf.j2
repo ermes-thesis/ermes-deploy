@@ -1,4 +1,10 @@
+{% set node = (nodes | selectattr("address", "equalto", node_address) | list | first) %}
+{% if not node %}
 {% set node = (nodes | selectattr("address", "equalto", ansible_host) | list | first) %}
+{% endif %}
+{% if not node %}
+# No topology entry matches node_address={{ node_address | default(ansible_host) }}
+{% else %}
 node:
   name: "{{ node.address }}:{{ common.port }}"
   domain: "{{ node.domain }}"
@@ -45,4 +51,4 @@ hierarchy:
 {% set _ = filtered_common_dict.update({item.key: item.value}) %}
 {% endfor %}
 {{ filtered_common_dict | to_nice_yaml(indent=2) }}
-
+{% endif %}
