@@ -1,11 +1,21 @@
 services:
+  ermes-node:
+    image: debian:bookworm-slim
+    container_name: ermes-test-node
+    restart: unless-stopped
+    network_mode: host
+    command: ["/usr/local/bin/ermes-node", "/etc/ermes-node/config.yaml"]
+    volumes:
+      - ./bin/ermes-node:/usr/local/bin/ermes-node:ro
+      - ./config:/etc/ermes-node:ro
+      - ./logs:/var/log/ermes-node
+
   redis:
     image: redis:7-alpine
     container_name: ermes-test-redis
     restart: unless-stopped
+    network_mode: host
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
     volumes:
       - redis-data:/data
 
@@ -14,13 +24,11 @@ services:
     image: minio/minio:latest
     container_name: ermes-test-minio
     restart: unless-stopped
+    network_mode: host
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: "{{ minio_root_user }}"
       MINIO_ROOT_PASSWORD: "{{ minio_root_password }}"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
     volumes:
       - minio-data:/data
 {% endif %}
@@ -30,4 +38,3 @@ volumes:
 {% if 'cloud_nodes' in group_names %}
   minio-data:
 {% endif %}
-

@@ -29,6 +29,26 @@ This assumes that SOLA4 can resolve and reach `sola-pi` directly. If the alias,
 address, or remote login user differs, update [`inventory.ini`](./inventory.ini).
 No `sola3`/`sola4` proxy configuration is required by this deployment.
 
+## Privileges
+
+The deployment playbook does not install or start Docker and does not use
+`sudo`, system-wide systemd, `/opt`, `/etc`, or `/var/log`. It uses the
+preinstalled Docker Compose and stores all files below
+`$HOME/ermes-test`. Redis, MinIO, and the Ermes node run as Compose services.
+
+The account used by Ansible must already be allowed to use Docker without sudo
+(normally by membership in the `docker` group). Run this read-only diagnostic:
+
+```bash
+ANSIBLE_CONFIG=test-deployment/ansible.cfg \
+  ansible-playbook -i test-deployment/inventory.ini \
+  test-deployment/check-prerequisites.yml
+```
+
+If `docker info` reports a permission error, the host Docker group/socket
+permissions must be fixed by an administrator; the playbook intentionally does
+not attempt that privileged change.
+
 ## Run
 
 First test local and SSH connectivity to both nodes:
@@ -66,6 +86,6 @@ ANSIBLE_CONFIG=test-deployment/ansible.cfg \
 `purge_volumes=true` is destructive for the test data. A later run of
 `deploy-test.sh` recreates and starts the service and containers.
 
-The script needs Go and Ansible on SOLA4. SOLA4 and the Raspberry need APT
-access, and the Raspberry needs SSH privilege escalation. Docker, Redis, and
-MinIO are installed and managed only by this test deployment.
+The script needs Go and Ansible on SOLA4. Docker Compose must already be
+installed and usable by the Ansible account on both machines. Docker, Redis,
+MinIO, and the Ermes node are managed only by this test deployment.

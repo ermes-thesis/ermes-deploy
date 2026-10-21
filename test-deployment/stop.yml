@@ -1,19 +1,11 @@
 ---
 - name: Stop isolated Ermes heterogeneous test
   hosts: nodes
-  become: true
   vars:
-    docker_compose_dir: /opt/ermes-test
+    docker_compose_dir: "{{ ansible_env.HOME }}/ermes-test"
     purge_volumes: false
   tasks:
-    - name: Stop and disable Ermes test node
-      ansible.builtin.systemd:
-        name: ermes-test-node
-        state: stopped
-        enabled: false
-      failed_when: false
-
-    - name: Stop and remove dependency containers
+    - name: Stop and remove test containers
       ansible.builtin.command:
         cmd: >-
           docker compose down --remove-orphans

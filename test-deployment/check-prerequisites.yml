@@ -1,0 +1,34 @@
+---
+- name: Check isolated deployment prerequisites
+  hosts: nodes
+  gather_facts: false
+  tasks:
+    - name: Check remote execution identity
+      ansible.builtin.command: id
+      register: identity
+      changed_when: false
+
+    - name: Check Docker CLI availability
+      ansible.builtin.command: docker --version
+      register: docker_cli
+      changed_when: false
+      failed_when: false
+
+    - name: Check Docker daemon access
+      ansible.builtin.command: docker info
+      register: docker_access
+      changed_when: false
+      failed_when: false
+
+    - name: Report prerequisite status
+      ansible.builtin.debug:
+        msg:
+          - "Remote identity: {{ identity.stdout }}"
+          - "Docker CLI: {{ docker_cli.stdout | default(docker_cli.msg, true) }}"
+          - >-
+            Docker daemon access:
+            {{ 'available' if docker_access.rc == 0 else 'unavailable (' ~
+            (docker_access.stderr | default(docker_access.msg, true)) ~ ')' }}
+          - >-
+            The deployment playbook expects Docker Compose to be preinstalled
+            and usable by this account without sudo.
