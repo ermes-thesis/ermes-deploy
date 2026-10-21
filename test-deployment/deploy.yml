@@ -4,6 +4,7 @@
   vars_files:
     - ../group_vars/all.yml
     - ../group_vars/nodes.yml
+    - ../inventories/heterogeneous/group_vars/nodes.yml
     - group_vars/all.yml
   vars:
     docker_compose_dir: "{{ ansible_env.HOME }}/ermes-test"
@@ -52,3 +53,4 @@
         cmd: docker compose up -d --remove-orphans
         chdir: "{{ docker_compose_dir }}"
       changed_when: false
+      when: not ansible_check_mode

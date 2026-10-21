@@ -18,8 +18,8 @@ if [[ ! -f ../../ermes-compilation/aarch64/main-aarch64 ]]; then
 fi
 
 echo "Building the amd64 node from $src"
-GOOS=linux GOARCH=amd64 go build -C "$src" -ldflags="-s -w" -o "$binary" main
+GOOS=linux GOARCH=amd64 ~/go/bin/go build -C "$src" -ldflags="-s -w" -o "$binary" main
 
 echo "Deploying the heterogeneous test"
 ansible-playbook -i inventory.ini deploy.yml \
-  -e "ermes_binary_amd64=$PWD/$binary"
+  -e "ermes_binary_amd64=$binary"
