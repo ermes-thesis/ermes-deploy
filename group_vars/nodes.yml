@@ -42,9 +42,10 @@ common:
     wasmPoolConfig:
       poolSize: 50
       timeout: 1s
+      runmode: 1
+      runtime: wasmtime
       withCache: 2
       cacheSize: 50
-      isAot: false
     startingOutdatedDataBackoff: 10ms
     maxOutdatedDataRetries: 15
     maxOutdatedDataBackoff: 2s
