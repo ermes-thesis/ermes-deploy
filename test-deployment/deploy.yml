@@ -4,7 +4,6 @@
   vars_files:
     - ../group_vars/all.yml
     - ../group_vars/nodes.yml
-    - ../inventories/heterogeneous/group_vars/nodes.yml
     - group_vars/all.yml
   vars:
     docker_compose_dir: "{{ ansible_env.HOME }}/ermes-test"

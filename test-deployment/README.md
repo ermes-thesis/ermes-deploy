@@ -10,6 +10,10 @@ images are selected by Docker's multi-platform resolver:
 - Redis runs on both nodes.
 - MinIO runs on `cloud-node`.
 
+The topology used by the node configuration is defined locally in
+[`group_vars/all.yml`](./group_vars/all.yml), so this deployment does not
+depend on the separate heterogeneous inventory variable files.
+
 The amd64 Ermes executable is built from `../../ermes-generic-node`. The ARM64
 executable defaults to the verified path
 `../../ermes-compilation/aarch64/main-aarch64`. Override it with

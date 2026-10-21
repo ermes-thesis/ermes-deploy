@@ -5,3 +5,21 @@ ermes_public_key: "{{ playbook_dir }}/../../ermes-generic-node/keys/public.pem"
 minio_root_user: "minioadmin"
 minio_root_password: "minioadmin"
 
+nodes:
+  - name: "SOLA4"
+    domain: "SOLA4"
+    address: 10.79.10.134
+    is_cloud: true
+    latency_up: 0
+  - name: "PI"
+    domain: "SOLA4/PI"
+    address: 10.79.10.243
+    is_cloud: false
+    latency_up: 0
+
+common:
+  stateful: true
+  isCentralStorage: false
+  migrationManager:
+    weakPolicy: ALWAYSCOPYPOLICY
+    strongPolicy: ERMESPOLICY
