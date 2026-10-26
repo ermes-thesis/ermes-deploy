@@ -131,6 +131,86 @@ tail -n 100 "$HOME/ermes-test/logs/general.log"
 tail -n 100 "$HOME/ermes-test/logs/ermes-node.err.log"
 ```
 
+The Ermes container runs as `root` by default, so the application can create
+files that the host login user cannot read. Inspect the ownership and mode
+first:
+
+```bash
+ls -ld "$HOME/ermes-test/logs"
+ls -l "$HOME/ermes-test/logs"
+```
+
+You can read the files through the container as root without changing them:
+
+```bash
+docker exec -u 0 ermes-test-node \
+  tail -n 100 /var/log/ermes-node/general.log
+docker exec -u 0 ermes-test-node \
+  tail -n 100 /var/log/ermes-node/ermes-node.err.log
+```
+
+If the node is restarting too quickly for `docker exec`, read its container
+stderr instead:
+
+```bash
+docker logs --tail=200 ermes-test-node
+```
+
+To extract a file from a container that is restarting too quickly, temporarily
+disable only this container's restart policy, stop it, run it once, and copy
+the file while the container is stopped:
+
+```bash
+docker update --restart=no ermes-test-node
+docker stop ermes-test-node
+
+# Capture the startup error and wait for the one-shot container to exit.
+docker start -a ermes-test-node > /tmp/ermes-startup.log 2>&1 || true
+
+# docker cp also works when the container has exited.
+docker cp ermes-test-node:/var/log/ermes-node/general.log \
+  /tmp/ermes-general.log
+docker cp ermes-test-node:/var/log/ermes-node/ermes-node.err.log \
+  /tmp/ermes-node.err.log
+```
+
+Inspect the extracted files and the startup output:
+
+```bash
+tail -n 100 /tmp/ermes-general.log
+tail -n 100 /tmp/ermes-node.err.log
+tail -n 100 /tmp/ermes-startup.log
+```
+
+Restore the Compose restart policy and start the service again when finished:
+
+```bash
+docker update --restart=unless-stopped ermes-test-node
+docker start ermes-test-node
+```
+
+Do not use `docker compose down` before `docker cp`, because removing the
+container also removes the stopped container filesystem from which the file is
+being copied. The host bind mount under `$HOME/ermes-test/logs` is not removed
+by this procedure.
+
+To make the bind-mounted files readable by the host login user, change only
+the log-file mode from the container:
+
+```bash
+docker exec -u 0 ermes-test-node \
+  chmod 0644 /var/log/ermes-node/general.log \
+             /var/log/ermes-node/ermes-node.err.log
+```
+
+Alternatively, copy a snapshot out of the container without changing its
+permissions:
+
+```bash
+docker cp ermes-test-node:/var/log/ermes-node/general.log /tmp/ermes-general.log
+tail -n 100 /tmp/ermes-general.log
+```
+
 To inspect both hosts through Ansible:
 
 ```bash
@@ -141,23 +221,40 @@ ANSIBLE_CONFIG=test-deployment/ansible.cfg \
 
 ### Check Redis
 
-Redis runs on both nodes on TCP port `6381`. The test deployment uses this
-separate port because host networking would otherwise collide with a Redis
-instance already listening on the standard `6379`. From SOLA4, if `redis-cli` is
-installed:
+Redis runs on both nodes on TCP port `6381` using
+`redis/redis-stack-server:8.4.0`. The image is pinned to Redis Stack `8.4.0`
+instead of `latest` so both nodes use the required, reproducible version.
+Redis Stack is required because Ermes creates and queries metadata indexes
+with RediSearch commands such as `FT.CREATE` and `FT.SEARCH`; the standard
+`redis:7-alpine` image does not provide those commands. The test deployment
+uses port `6381` because host networking would otherwise collide with a Redis
+instance already listening on the standard `6379`. From SOLA4, if `redis-cli`
+is installed:
 
 ```bash
 redis-cli -h 10.79.10.134 -p 6381 PING
 redis-cli -h 10.79.10.243 -p 6381 PING
 ```
 
-Each command should return `PONG`. If `redis-cli` is unavailable locally, run
-the check on the target host through Docker:
+Each command should return `PONG`. Confirm that RediSearch is loaded as well:
+
+```bash
+docker image inspect redis/redis-stack-server:8.4.0 \
+  --format '{{.RepoTags}} {{.Config.Labels}}'
+redis-cli -h 10.79.10.134 -p 6381 MODULE LIST
+redis-cli -h 10.79.10.243 -p 6381 MODULE LIST
+```
+
+The module list should contain an entry whose name is `search` or
+`searchlight`. If `redis-cli` is unavailable locally, run the checks on the
+target host through Docker:
 
 ```bash
 ssh sola-pi 'docker exec ermes-test-redis redis-cli -p 6381 PING'
+ssh sola-pi 'docker exec ermes-test-redis redis-cli -p 6381 MODULE LIST'
 # On SOLA4:
 docker exec ermes-test-redis redis-cli -p 6381 PING
+docker exec ermes-test-redis redis-cli -p 6381 MODULE LIST
 ```
 
 ### Check MinIO with curl
