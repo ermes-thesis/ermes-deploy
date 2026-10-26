@@ -56,6 +56,17 @@ If `docker info` reports a permission error, the host Docker group/socket
 permissions must be fixed by an administrator; the playbook intentionally does
 not attempt that privileged change.
 
+WasmEdge must be installed on both hosts because the Ermes executable is
+dynamically linked against `libwasmedge.so.0`. The deployment mounts the host
+library into the Ermes container. The default path is
+`/usr/local/lib/libwasmedge.so.0.1.0`; override it when the library is installed
+elsewhere:
+
+```bash
+ansible-playbook -i test-deployment/inventory.ini test-deployment/deploy.yml \
+  -e wasmedge_host_library=/path/to/libwasmedge.so.0.1.0
+```
+
 MinIO uses the locally built `minio-local:legacy` image by default. The image
 must be manuall built on SOLA4, following the instructions in the forked 
 `MinIO` repository inside this organization; Compose will not pull it from a 
@@ -84,6 +95,110 @@ Then build the amd64 executable and deploy:
 ```bash
 ./test-deployment/deploy-test.sh
 ```
+
+After changing the Compose template or variables, rerun the deployment so
+Compose recreates the affected containers:
+
+```bash
+ANSIBLE_CONFIG=test-deployment/ansible.cfg \
+  ansible-playbook -i test-deployment/inventory.ini test-deployment/deploy.yml
+```
+
+## Verify services
+
+The Compose file uses host networking. The cloud node is reachable at
+`10.79.10.134` and the edge node at `10.79.10.243`; these are the
+`node_address` values in [`inventory.ini`](./inventory.ini). Run the following
+checks from SOLA4, or run them directly on the corresponding host.
+
+### Check container state and logs
+
+On each host, inspect the Compose services from the deployment directory:
+
+```bash
+cd "$HOME/ermes-test"
+docker compose ps
+docker compose logs --tail=100 ermes-node redis
+# Run this on cloud-node as well:
+docker compose logs --tail=100 minio
+```
+
+All expected containers should have a `running`/`Up` state. The Ermes node
+writes its logs under `$HOME/ermes-test/logs` on the host:
+
+```bash
+tail -n 100 "$HOME/ermes-test/logs/general.log"
+tail -n 100 "$HOME/ermes-test/logs/ermes-node.err.log"
+```
+
+To inspect both hosts through Ansible:
+
+```bash
+ANSIBLE_CONFIG=test-deployment/ansible.cfg \
+  ansible -i test-deployment/inventory.ini nodes \
+  -m shell -a 'cd "$HOME/ermes-test" && docker compose ps'
+```
+
+### Check Redis
+
+Redis runs on both nodes on TCP port `6381`. The test deployment uses this
+separate port because host networking would otherwise collide with a Redis
+instance already listening on the standard `6379`. From SOLA4, if `redis-cli` is
+installed:
+
+```bash
+redis-cli -h 10.79.10.134 -p 6381 PING
+redis-cli -h 10.79.10.243 -p 6381 PING
+```
+
+Each command should return `PONG`. If `redis-cli` is unavailable locally, run
+the check on the target host through Docker:
+
+```bash
+ssh sola-pi 'docker exec ermes-test-redis redis-cli -p 6381 PING'
+# On SOLA4:
+docker exec ermes-test-redis redis-cli -p 6381 PING
+```
+
+### Check MinIO with curl
+
+MinIO runs only on the cloud node. Its S3 API listens on port `9000`, and its
+web console listens on port `9001`. The live and ready endpoints can be
+checked without credentials:
+
+```bash
+curl -i http://10.79.10.134:9000/minio/health/live
+curl -i http://10.79.10.134:9000/minio/health/ready
+```
+
+Both requests should return HTTP `200`. The console is reachable at
+<http://10.79.10.134:9001/>; it is a web UI rather than a service health
+endpoint.
+
+### Check Ermes node connectivity
+
+The Ermes node is a native binary using its own protocol on TCP port `12345`;
+it does not expose an HTTP health endpoint in this deployment. Therefore,
+`curl http://...:12345` is not a valid status check. Test that the protocol
+port is accepting connections instead:
+
+```bash
+nc -vz 10.79.10.134 12345
+nc -vz 10.79.10.243 12345
+```
+
+If `nc` is unavailable, use Bash's TCP check:
+
+```bash
+timeout 3 bash -c '</dev/tcp/10.79.10.134/12345' \
+  && echo 'cloud Ermes port is open'
+timeout 3 bash -c '</dev/tcp/10.79.10.243/12345' \
+  && echo 'edge Ermes port is open'
+```
+
+An open port confirms that the process is listening; combine it with
+`docker compose ps` and the Ermes logs to confirm that the node started
+successfully and is not repeatedly restarting.
 
 To stop the Ermes application and all Redis/MinIO containers while preserving
 their data volumes:

@@ -6,6 +6,7 @@ minio_root_user: "minioadmin"
 minio_root_password: "minioadmin"
 minio_enabled: true
 minio_image: "minio-local:legacy"
+wasmedge_host_library: "/usr/local/lib/libwasmedge.so.0.1.0"
 
 nodes:
   - name: "SOLA4"
@@ -22,6 +23,8 @@ nodes:
 common:
   stateful: true
   isCentralStorage: false
+  redis:
+    port: 6381
   migrationManager:
     weakPolicy: ALWAYSCOPYPOLICY
     strongPolicy: ERMESPOLICY

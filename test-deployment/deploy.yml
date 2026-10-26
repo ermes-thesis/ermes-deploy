@@ -23,6 +23,21 @@
         - "{{ ermes_config_dir }}"
         - "{{ ermes_log_dir }}"
 
+    - name: Check host WasmEdge runtime library
+      ansible.builtin.stat:
+        path: "{{ wasmedge_host_library }}"
+      register: wasmedge_library
+
+    - name: Require host WasmEdge runtime library
+      ansible.builtin.assert:
+        that:
+          - wasmedge_library.stat.exists
+          - wasmedge_library.stat.isreg
+        fail_msg: >-
+          WasmEdge runtime library {{ wasmedge_host_library }} is missing on
+          {{ inventory_hostname }}. Install WasmEdge on the host or override
+          wasmedge_host_library with the architecture-specific library path.
+
     - name: Copy dependency compose file
       ansible.builtin.template:
         src: compose.yml.j2

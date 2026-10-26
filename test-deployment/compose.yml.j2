@@ -5,17 +5,20 @@ services:
     restart: unless-stopped
     network_mode: host
     command: ["/usr/local/bin/ermes-node", "/etc/ermes-node/config.yaml"]
+    environment:
+      LD_LIBRARY_PATH: /usr/local/lib
     volumes:
       - ./bin/ermes-node:/usr/local/bin/ermes-node:ro
       - ./config:/etc/ermes-node:ro
       - ./logs:/var/log/ermes-node
+      - "{{ wasmedge_host_library }}:/usr/local/lib/libwasmedge.so.0:ro"
 
   redis:
     image: redis:7-alpine
     container_name: ermes-test-redis
     restart: unless-stopped
     network_mode: host
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--port", "{{ common.redis.port }}"]
     volumes:
       - redis-data:/data
 
