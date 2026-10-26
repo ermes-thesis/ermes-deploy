@@ -18,7 +18,7 @@ services:
     container_name: ermes-test-redis
     restart: unless-stopped
     network_mode: host
-    command: ["redis-stack-server", "--appendonly", "yes", "--port", "{{ common.redis.port }}"]
+    command: ["redis-server", "--appendonly", "yes", "--port", "{{ common.redis.port }}"]
     volumes:
       - redis-data:/data
 

@@ -6,7 +6,7 @@ minio_root_user: "minioadmin"
 minio_root_password: "minioadmin"
 minio_enabled: true
 minio_image: "minio-local:legacy"
-redis_image: "redis/redis-stack-server:8.4.0"
+redis_image: "redis:8.4"
 wasmedge_host_library: "/usr/local/lib/libwasmedge.so.0.1.0"
 
 nodes:

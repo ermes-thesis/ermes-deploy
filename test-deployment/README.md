@@ -221,15 +221,11 @@ ANSIBLE_CONFIG=test-deployment/ansible.cfg \
 
 ### Check Redis
 
-Redis runs on both nodes on TCP port `6381` using
-`redis/redis-stack-server:8.4.0`. The image is pinned to Redis Stack `8.4.0`
-instead of `latest` so both nodes use the required, reproducible version.
-Redis Stack is required because Ermes creates and queries metadata indexes
-with RediSearch commands such as `FT.CREATE` and `FT.SEARCH`; the standard
-`redis:7-alpine` image does not provide those commands. The test deployment
-uses port `6381` because host networking would otherwise collide with a Redis
-instance already listening on the standard `6379`. From SOLA4, if `redis-cli`
-is installed:
+Redis runs on both nodes on TCP port `6381` using the official
+`redis:8.4` image. Redis 8 includes the search commands required by Ermes,
+including `FT.CREATE` and `FT.SEARCH`. The test deployment uses port `6381`
+because host networking would otherwise collide with a Redis instance already
+listening on the standard `6379`. From SOLA4, if `redis-cli` is installed:
 
 ```bash
 redis-cli -h 10.79.10.134 -p 6381 PING
@@ -239,7 +235,7 @@ redis-cli -h 10.79.10.243 -p 6381 PING
 Each command should return `PONG`. Confirm that RediSearch is loaded as well:
 
 ```bash
-docker image inspect redis/redis-stack-server:8.4.0 \
+docker image inspect redis:8.4 \
   --format '{{.RepoTags}} {{.Config.Labels}}'
 redis-cli -h 10.79.10.134 -p 6381 MODULE LIST
 redis-cli -h 10.79.10.243 -p 6381 MODULE LIST
