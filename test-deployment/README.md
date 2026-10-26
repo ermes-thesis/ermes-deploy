@@ -5,10 +5,11 @@ playbooks, roles, inventories, or group variables.
 
 The playbooks use [`inventory.ini`](./inventory.ini), which defines
 `cloud-node` (`amd64`) and `edge-node-1` (the Raspberry Pi, `arm64`). Docker
-images are selected by Docker's multi-platform resolver:
+images are selected by Docker's multi-platform resolver, except for MinIO,
+which uses the locally built `minio-local:legacy` image:
 
 - Redis runs on both nodes.
-- MinIO runs on `cloud-node`.
+- MinIO runs on `cloud-node` from the local `minio-local:legacy` image.
 
 The topology used by the node configuration is defined locally in
 [`group_vars/all.yml`](./group_vars/all.yml), so this deployment does not
@@ -55,11 +56,19 @@ If `docker info` reports a permission error, the host Docker group/socket
 permissions must be fixed by an administrator; the playbook intentionally does
 not attempt that privileged change.
 
-The MinIO image can be overridden with `-e minio_image=...`; it defaults to
-`docker.io/minio/minio:latest`. Test registry access independently with
-`docker pull docker.io/minio/minio:latest` or provide an image from a registry
-available to the hardware. An authentication or registry-policy failure is
-external to Ansible and prevents Compose from starting all services.
+MinIO uses the locally built `minio-local:legacy` image by default. The image
+must be manuall built on SOLA4, following the instructions in the forked 
+`MinIO` repository inside this organization; Compose will not pull it from a 
+registry. Verify it before deploying:
+
+```bash
+docker image inspect minio-local:legacy
+```
+
+If the image has a different local tag, override it with
+`-e minio_image=<local-image:tag>`. If MinIO is intentionally unavailable for a
+diagnostic run, set `-e minio_enabled=false`; otherwise a missing local image
+will prevent Compose from starting the cloud services.
 
 ## Run
 

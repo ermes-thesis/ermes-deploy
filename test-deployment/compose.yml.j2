@@ -19,9 +19,10 @@ services:
     volumes:
       - redis-data:/data
 
-{% if 'cloud_nodes' in group_names %}
+{% if 'cloud_nodes' in group_names and minio_enabled | bool %}
   minio:
     image: "{{ minio_image }}"
+    pull_policy: never
     container_name: ermes-test-minio
     restart: unless-stopped
     network_mode: host
@@ -35,6 +36,6 @@ services:
 
 volumes:
   redis-data:
-{% if 'cloud_nodes' in group_names %}
+{% if 'cloud_nodes' in group_names and minio_enabled | bool %}
   minio-data:
 {% endif %}
