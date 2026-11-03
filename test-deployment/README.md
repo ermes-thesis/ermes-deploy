@@ -110,8 +110,8 @@ ANSIBLE_CONFIG=test-deployment/ansible.cfg \
 ```
 
 The central stack is stored under `$HOME/ermes-central-test` on SOLA4. It uses
-host networking and reserves Redis port `6380`, the MinIO S3 API port `9091`,
-the MinIO console port `9092`, the Function registry port `8080`, and the
+host networking and reserves Redis port `6380`, the MinIO S3 API port `9000`,
+the MinIO console port `9001`, the Function registry port `8080`, and the
 Central repo port `8081`. The Central repo also mounts the host WasmEdge
 runtime library, using the same `wasmedge_host_library` setting as the
 containerized Ermes node. The central configuration files are reused from
@@ -245,15 +245,14 @@ ANSIBLE_CONFIG=test-deployment/ansible.cfg \
 
 ### Check Redis
 
-Redis runs on both nodes on TCP port `6381` using the official
+Redis runs on both nodes on TCP port `6379` using the official
 `redis:8.4` image. Redis 8 includes the search commands required by Ermes,
-including `FT.CREATE` and `FT.SEARCH`. The test deployment uses port `6381`
-because host networking would otherwise collide with a Redis instance already
-listening on the standard `6379`. From SOLA4, if `redis-cli` is installed:
+including `FT.CREATE` and `FT.SEARCH`. The test deployment uses the standard
+Redis port `6379`. From SOLA4, if `redis-cli` is installed:
 
 ```bash
-redis-cli -h 10.79.10.134 -p 6381 PING
-redis-cli -h 10.79.10.243 -p 6381 PING
+redis-cli -h 10.79.10.134 -p 6379 PING
+redis-cli -h 10.79.10.243 -p 6379 PING
 ```
 
 Each command should return `PONG`. Confirm that RediSearch is loaded as well:
@@ -261,8 +260,8 @@ Each command should return `PONG`. Confirm that RediSearch is loaded as well:
 ```bash
 docker image inspect redis:8.4 \
   --format '{{.RepoTags}} {{.Config.Labels}}'
-redis-cli -h 10.79.10.134 -p 6381 MODULE LIST
-redis-cli -h 10.79.10.243 -p 6381 MODULE LIST
+redis-cli -h 10.79.10.134 -p 6379 MODULE LIST
+redis-cli -h 10.79.10.243 -p 6379 MODULE LIST
 ```
 
 The module list should contain an entry whose name is `search` or
@@ -270,27 +269,27 @@ The module list should contain an entry whose name is `search` or
 target host through Docker:
 
 ```bash
-ssh sola-pi 'docker exec ermes-test-redis redis-cli -p 6381 PING'
-ssh sola-pi 'docker exec ermes-test-redis redis-cli -p 6381 MODULE LIST'
+ssh sola-pi 'docker exec ermes-test-redis redis-cli -p 6379 PING'
+ssh sola-pi 'docker exec ermes-test-redis redis-cli -p 6379 MODULE LIST'
 # On SOLA4:
-docker exec ermes-test-redis redis-cli -p 6381 PING
-docker exec ermes-test-redis redis-cli -p 6381 MODULE LIST
+docker exec ermes-test-redis redis-cli -p 6379 PING
+docker exec ermes-test-redis redis-cli -p 6379 MODULE LIST
 ```
 
 ### Check central MinIO with curl
 
 Central MinIO runs only in the central Compose project on the cloud node. Its
-S3 API listens on port `9091`, and its web console listens on port `9092`. The
+S3 API listens on port `9000`, and its web console listens on port `9001`. The
 live and ready endpoints can be
 checked without credentials:
 
 ```bash
-curl -i http://10.79.10.134:9091/minio/health/live
-curl -i http://10.79.10.134:9091/minio/health/ready
+curl -i http://10.79.10.134:9000/minio/health/live
+curl -i http://10.79.10.134:9000/minio/health/ready
 ```
 
 Both requests should return HTTP `200`. The console is reachable at
-<http://10.79.10.134:9092/>; it is a web UI rather than a service health
+<http://10.79.10.134:9001/>; it is a web UI rather than a service health
 endpoint.
 
 ### Check Ermes node connectivity

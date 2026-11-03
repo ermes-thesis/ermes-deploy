@@ -24,7 +24,7 @@ common:
   stateful: true
   isCentralStorage: false
   redis:
-    port: 6381
+    port: 6379
   migrationManager:
     weakPolicy: ALWAYSCOPYPOLICY
     strongPolicy: ERMESPOLICY
