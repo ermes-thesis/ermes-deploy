@@ -121,7 +121,8 @@ containerized Ermes node. The central configuration files are reused from
 by systemd. The deployment also uploads
 `../ermes-central-repo/integration_test/authFunction@1.0.0.wasm` through the
 Function Registry API and activates it as the Central repo authentication
-function.
+function. A one-shot MinIO client container creates the `functions` and
+`templates` buckets before that upload.
 
 After changing the Compose template or variables, rerun the deployment so
 Compose recreates the affected containers:

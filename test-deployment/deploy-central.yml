@@ -130,9 +130,16 @@
       changed_when: false
       when: not ansible_check_mode
 
+    - name: Initialize central MinIO buckets
+      ansible.builtin.command:
+        cmd: docker compose run --rm minio-init
+        chdir: "{{ central_compose_dir }}"
+      changed_when: false
+      when: not ansible_check_mode
+
     - name: Register and activate authentication function
       ansible.builtin.command:
-        cmd:
+        argv:
           - "{{ central_install_dir }}/register-auth-function.sh"
           - "{{ central_install_dir }}/authFunction@1.0.0.wasm"
           - "http://127.0.0.1:8080"
