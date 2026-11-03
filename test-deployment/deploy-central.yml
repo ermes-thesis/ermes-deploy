@@ -13,8 +13,8 @@
     central_repo_binary: "{{ playbook_dir }}/../../ermes-central-repo/ermes-central-repo"
     central_repo_private_key: "{{ playbook_dir }}/../../ermes-central-repo/keys/private.pem"
     central_redis_port: 6380
-    central_minio_port: 9000
-    central_minio_console_port: 9001
+    central_minio_port: 9091
+    central_minio_console_port: 9092
     auth_function_wasm: "{{ playbook_dir }}/../../ermes-central-repo/integration_test/authFunction@1.0.0.wasm"
     auth_function_script: "{{ playbook_dir }}/register-auth-function.sh"
     minio_bucket_script: "{{ playbook_dir }}/initialize-minio-buckets.py"
