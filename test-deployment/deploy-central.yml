@@ -17,6 +17,7 @@
     central_minio_console_port: 9092
     auth_function_wasm: "{{ playbook_dir }}/../../ermes-central-repo/integration_test/authFunction@1.0.0.wasm"
     auth_function_script: "{{ playbook_dir }}/register-auth-function.sh"
+    minio_bucket_script: "{{ playbook_dir }}/initialize-minio-buckets.py"
     central_dev_secret: "dev_secret"
   tasks:
     - name: Check host WasmEdge runtime library
@@ -50,6 +51,8 @@
           path: "{{ auth_function_wasm }}"
         - name: Authentication function registration script
           path: "{{ auth_function_script }}"
+        - name: MinIO bucket initialization script
+          path: "{{ minio_bucket_script }}"
       register: central_artifacts
 
     - name: Require central node artifacts
@@ -123,6 +126,12 @@
         dest: "{{ central_install_dir }}/register-auth-function.sh"
         mode: "0755"
 
+    - name: Copy MinIO bucket initialization script
+      ansible.builtin.copy:
+        src: "{{ minio_bucket_script }}"
+        dest: "{{ central_install_dir }}/initialize-minio-buckets.py"
+        mode: "0755"
+
     - name: Start central services
       ansible.builtin.command:
         cmd: docker compose up -d --remove-orphans
@@ -132,8 +141,12 @@
 
     - name: Initialize central MinIO buckets
       ansible.builtin.command:
-        cmd: docker compose run --rm minio-init
-        chdir: "{{ central_compose_dir }}"
+        argv:
+          - python3
+          - "{{ central_install_dir }}/initialize-minio-buckets.py"
+          - "http://127.0.0.1:{{ central_minio_port }}"
+          - "{{ minio_root_user }}"
+          - "{{ minio_root_password }}"
       changed_when: false
       when: not ansible_check_mode
 

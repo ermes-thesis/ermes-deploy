@@ -4,9 +4,7 @@ ermes_binary_arm64: "{{ playbook_dir }}/../../ermes-compilation/aarch64/main-aar
 ermes_public_key: "{{ playbook_dir }}/../../ermes-generic-node/keys/public.pem"
 minio_root_user: "minioadmin"
 minio_root_password: "minioadmin"
-minio_enabled: true
 minio_image: "minio-local:legacy"
-minio_client_image: "minio/mc:latest"
 redis_image: "redis:8.4"
 wasmedge_host_library: "/usr/local/lib/libwasmedge.so.0.1.0"
 

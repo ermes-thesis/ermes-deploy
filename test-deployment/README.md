@@ -5,11 +5,9 @@ playbooks, roles, inventories, or group variables.
 
 The playbooks use [`inventory.ini`](./inventory.ini), which defines
 `cloud-node` (`amd64`) and `edge-node-1` (the Raspberry Pi, `arm64`). Docker
-images are selected by Docker's multi-platform resolver, except for MinIO,
-which uses the locally built `minio-local:legacy` image:
+images are selected by Docker's multi-platform resolver:
 
 - Redis runs on both nodes.
-- MinIO runs on `cloud-node` from the local `minio-local:legacy` image.
 - The Function registry and Central repo run on `cloud-node` in a separate
   Compose project.
 
@@ -43,7 +41,8 @@ No `sola3`/`sola4` proxy configuration is required by this deployment.
 The deployment playbook does not install or start Docker and does not use
 `sudo`, system-wide systemd, `/opt`, `/etc`, or `/var/log`. It uses the
 preinstalled Docker Compose and stores all files below
-`$HOME/ermes-test`. Redis, MinIO, and the Ermes node run as Compose services.
+`$HOME/ermes-test`. Redis and the Ermes node run as Compose services. MinIO is
+deployed only in the separate central project.
 
 The account used by Ansible must already be allowed to use Docker without sudo
 (normally by membership in the `docker` group). Run this read-only diagnostic:
@@ -69,19 +68,18 @@ ansible-playbook -i test-deployment/inventory.ini test-deployment/deploy.yml \
   -e wasmedge_host_library=/path/to/libwasmedge.so.0.1.0
 ```
 
-MinIO uses the locally built `minio-local:legacy` image by default. The image
-must be manuall built on SOLA4, following the instructions in the forked 
-`MinIO` repository inside this organization; Compose will not pull it from a 
-registry. Verify it before deploying:
+The central MinIO uses the locally built `minio-local:legacy` image. The image
+must be manually built on SOLA4, following the instructions in the forked
+`MinIO` repository inside this organization; Compose will not pull it from a
+registry. Verify it before deploying the central project:
 
 ```bash
 docker image inspect minio-local:legacy
 ```
 
 If the image has a different local tag, override it with
-`-e minio_image=<local-image:tag>`. If MinIO is intentionally unavailable for a
-diagnostic run, set `-e minio_enabled=false`; otherwise a missing local image
-will prevent Compose from starting the cloud services.
+`-e minio_image=<local-image:tag>`; a missing local image prevents the central
+services from starting.
 
 ## Run
 
@@ -121,8 +119,8 @@ containerized Ermes node. The central configuration files are reused from
 by systemd. The deployment also uploads
 `../ermes-central-repo/integration_test/authFunction@1.0.0.wasm` through the
 Function Registry API and activates it as the Central repo authentication
-function. A one-shot MinIO client container creates the `functions` and
-`templates` buckets before that upload.
+function. A local Python script creates the `functions` and `templates` buckets
+before that upload, so no additional MinIO client image is required.
 
 After changing the Compose template or variables, rerun the deployment so
 Compose recreates the affected containers:
@@ -147,8 +145,6 @@ On each host, inspect the Compose services from the deployment directory:
 cd "$HOME/ermes-test"
 docker compose ps
 docker compose logs --tail=100 ermes-node redis
-# Run this on cloud-node as well:
-docker compose logs --tail=100 minio
 ```
 
 All expected containers should have a `running`/`Up` state. The Ermes node
@@ -281,19 +277,20 @@ docker exec ermes-test-redis redis-cli -p 6381 PING
 docker exec ermes-test-redis redis-cli -p 6381 MODULE LIST
 ```
 
-### Check MinIO with curl
+### Check central MinIO with curl
 
-MinIO runs only on the cloud node. Its S3 API listens on port `9000`, and its
-web console listens on port `9001`. The live and ready endpoints can be
+Central MinIO runs only in the central Compose project on the cloud node. Its
+S3 API listens on port `9091`, and its web console listens on port `9092`. The
+live and ready endpoints can be
 checked without credentials:
 
 ```bash
-curl -i http://10.79.10.134:9000/minio/health/live
-curl -i http://10.79.10.134:9000/minio/health/ready
+curl -i http://10.79.10.134:9091/minio/health/live
+curl -i http://10.79.10.134:9091/minio/health/ready
 ```
 
 Both requests should return HTTP `200`. The console is reachable at
-<http://10.79.10.134:9001/>; it is a web UI rather than a service health
+<http://10.79.10.134:9092/>; it is a web UI rather than a service health
 endpoint.
 
 ### Check Ermes node connectivity
@@ -321,7 +318,7 @@ An open port confirms that the process is listening; combine it with
 `docker compose ps` and the Ermes logs to confirm that the node started
 successfully and is not repeatedly restarting.
 
-To stop the Ermes application and all Redis/MinIO containers while preserving
+To stop the Ermes application and all Redis containers while preserving
 their data volumes:
 
 ```bash
@@ -331,7 +328,7 @@ ANSIBLE_CONFIG=test-deployment/ansible.cfg \
 
 The stop playbook removes the Compose containers. The Docker service itself is
 not stopped because it is the host container runtime. To remove the persisted
-Redis and MinIO data volumes as well, use:
+Redis and central MinIO data volumes as well, use:
 
 ```bash
 ANSIBLE_CONFIG=test-deployment/ansible.cfg \
