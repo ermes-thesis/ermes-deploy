@@ -52,6 +52,8 @@ services:
     container_name: ermes-central-repo
     restart: unless-stopped
     network_mode: host
+    environment:
+      LD_LIBRARY_PATH: /usr/local/lib
     command:
       - /usr/local/bin/ermes-central-repo
       - --config
@@ -61,6 +63,7 @@ services:
       - ./config/cr-config.yaml:/etc/ermes-cr/config.yaml:ro
       - ./config/private.pem:/etc/ermes-cr/private.pem:ro
       - ./logs/central-repo:/gtpLogs
+      - "{{ wasmedge_host_library }}:/usr/local/lib/libwasmedge.so.0:ro"
     depends_on:
       - redis
       - function-registry

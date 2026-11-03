@@ -114,7 +114,9 @@ ANSIBLE_CONFIG=test-deployment/ansible.cfg \
 The central stack is stored under `$HOME/ermes-central-test` on SOLA4. It uses
 host networking and reserves Redis port `6380`, the MinIO S3 API port `9091`,
 the MinIO console port `9092`, the Function registry port `8080`, and the
-Central repo port `8081`. The central configuration files are reused from
+Central repo port `8081`. The Central repo also mounts the host WasmEdge
+runtime library, using the same `wasmedge_host_library` setting as the
+containerized Ermes node. The central configuration files are reused from
 [`files/`](../files/), while the services are containerized instead of managed
 by systemd.
 
