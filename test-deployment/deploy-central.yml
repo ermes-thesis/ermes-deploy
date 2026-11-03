@@ -15,6 +15,9 @@
     central_redis_port: 6380
     central_minio_port: 9091
     central_minio_console_port: 9092
+    auth_function_wasm: "{{ playbook_dir }}/../../ermes-central-repo/integration_test/authFunction@1.0.0.wasm"
+    auth_function_script: "{{ playbook_dir }}/register-auth-function.sh"
+    central_dev_secret: "dev_secret"
   tasks:
     - name: Check host WasmEdge runtime library
       ansible.builtin.stat:
@@ -43,6 +46,10 @@
           path: "{{ central_repo_binary }}"
         - name: Central repo private key
           path: "{{ central_repo_private_key }}"
+        - name: Authentication function
+          path: "{{ auth_function_wasm }}"
+        - name: Authentication function registration script
+          path: "{{ auth_function_script }}"
       register: central_artifacts
 
     - name: Require central node artifacts
@@ -104,9 +111,32 @@
         dest: "{{ central_config_dir }}/private.pem"
         mode: "0600"
 
+    - name: Copy authentication function
+      ansible.builtin.copy:
+        src: "{{ auth_function_wasm }}"
+        dest: "{{ central_install_dir }}/authFunction@1.0.0.wasm"
+        mode: "0644"
+
+    - name: Copy authentication function registration script
+      ansible.builtin.copy:
+        src: "{{ auth_function_script }}"
+        dest: "{{ central_install_dir }}/register-auth-function.sh"
+        mode: "0755"
+
     - name: Start central services
       ansible.builtin.command:
         cmd: docker compose up -d --remove-orphans
         chdir: "{{ central_compose_dir }}"
       changed_when: false
+      when: not ansible_check_mode
+
+    - name: Register and activate authentication function
+      ansible.builtin.command:
+        cmd:
+          - "{{ central_install_dir }}/register-auth-function.sh"
+          - "{{ central_install_dir }}/authFunction@1.0.0.wasm"
+          - "http://127.0.0.1:8080"
+          - "http://127.0.0.1:8081"
+          - "{{ central_dev_secret }}"
+      changed_when: true
       when: not ansible_check_mode

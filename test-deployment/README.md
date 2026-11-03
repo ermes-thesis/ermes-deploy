@@ -118,7 +118,10 @@ Central repo port `8081`. The Central repo also mounts the host WasmEdge
 runtime library, using the same `wasmedge_host_library` setting as the
 containerized Ermes node. The central configuration files are reused from
 [`files/`](../files/), while the services are containerized instead of managed
-by systemd.
+by systemd. The deployment also uploads
+`../ermes-central-repo/integration_test/authFunction@1.0.0.wasm` through the
+Function Registry API and activates it as the Central repo authentication
+function.
 
 After changing the Compose template or variables, rerun the deployment so
 Compose recreates the affected containers:
