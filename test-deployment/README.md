@@ -10,6 +10,8 @@ which uses the locally built `minio-local:legacy` image:
 
 - Redis runs on both nodes.
 - MinIO runs on `cloud-node` from the local `minio-local:legacy` image.
+- The Function registry and Central repo run on `cloud-node` in a separate
+  Compose project.
 
 The topology used by the node configuration is defined locally in
 [`group_vars/all.yml`](./group_vars/all.yml), so this deployment does not
@@ -90,11 +92,31 @@ ANSIBLE_CONFIG=test-deployment/ansible.cfg \
   ansible-playbook -i test-deployment/inventory.ini test-deployment/ping.yml
 ```
 
-Then build the amd64 executable and deploy:
+Build the amd64 executable and deploy the heterogeneous nodes and central
+services:
 
 ```bash
 ./test-deployment/deploy-test.sh
 ```
+
+The central binaries must already exist at
+`../../ermes-function-registry/ermes-function-registry` and
+`../../ermes-central-repo/ermes-central-repo`; the Central repo key must be at
+`../../ermes-central-repo/keys/private.pem`. To deploy only the central
+services, run:
+
+```bash
+ANSIBLE_CONFIG=test-deployment/ansible.cfg \
+  ansible-playbook -i test-deployment/inventory.ini \
+  test-deployment/deploy-central.yml
+```
+
+The central stack is stored under `$HOME/ermes-central-test` on SOLA4. It uses
+host networking and reserves Redis port `6380`, the MinIO S3 API port `9091`,
+the MinIO console port `9092`, the Function registry port `8080`, and the
+Central repo port `8081`. The central configuration files are reused from
+[`files/`](../files/), while the services are containerized instead of managed
+by systemd.
 
 After changing the Compose template or variables, rerun the deployment so
 Compose recreates the affected containers:
@@ -312,7 +334,8 @@ ANSIBLE_CONFIG=test-deployment/ansible.cfg \
 ```
 
 `purge_volumes=true` is destructive for the test data. A later run of
-`deploy-test.sh` recreates and starts the service and containers.
+`deploy-test.sh` recreates and starts both Compose projects and their
+containers.
 
 The script needs Go and Ansible on SOLA4. Docker Compose must already be
 installed and usable by the Ansible account on both machines. Docker, Redis,

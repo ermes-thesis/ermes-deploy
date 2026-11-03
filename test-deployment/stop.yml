@@ -3,14 +3,23 @@
   hosts: nodes
   vars:
     docker_compose_dir: "{{ ansible_env.HOME }}/ermes-test"
+    central_compose_dir: "{{ ansible_env.HOME }}/ermes-central-test"
     purge_volumes: false
   tasks:
+    - name: Check test deployment directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ docker_compose_dir }}"
+        - "{{ central_compose_dir }}"
+      register: deployment_directories
+
     - name: Stop and remove test containers
       ansible.builtin.command:
         cmd: >-
           docker compose down --remove-orphans
           {{ '--volumes' if purge_volumes | bool else '' }}
-        chdir: "{{ docker_compose_dir }}"
+        chdir: "{{ item.stat.path }}"
       register: compose_down
       changed_when: >-
         'Removed' in compose_down.stdout or
@@ -19,3 +28,5 @@
       failed_when:
         - compose_down.rc != 0
         - "'no configuration file provided' not in compose_down.stderr"
+      loop: "{{ deployment_directories.results }}"
+      when: item.stat.exists

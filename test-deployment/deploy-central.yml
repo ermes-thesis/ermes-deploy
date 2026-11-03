@@ -1,0 +1,97 @@
+---
+- name: Deploy containerized Ermes central nodes
+  hosts: cloud_nodes
+  vars_files:
+    - ../group_vars/all.yml
+    - group_vars/all.yml
+  vars:
+    central_compose_dir: "{{ ansible_env.HOME }}/ermes-central-test"
+    central_install_dir: "{{ central_compose_dir }}/bin"
+    central_config_dir: "{{ central_compose_dir }}/config"
+    central_log_dir: "{{ central_compose_dir }}/logs"
+    function_registry_binary: "{{ playbook_dir }}/../../ermes-function-registry/ermes-function-registry"
+    central_repo_binary: "{{ playbook_dir }}/../../ermes-central-repo/ermes-central-repo"
+    central_repo_private_key: "{{ playbook_dir }}/../../ermes-central-repo/keys/private.pem"
+    central_redis_port: 6380
+    central_minio_port: 9091
+    central_minio_console_port: 9092
+  tasks:
+    - name: Check central node artifacts
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      delegate_to: localhost
+      become: false
+      loop:
+        - name: Function registry binary
+          path: "{{ function_registry_binary }}"
+        - name: Central repo binary
+          path: "{{ central_repo_binary }}"
+        - name: Central repo private key
+          path: "{{ central_repo_private_key }}"
+      register: central_artifacts
+
+    - name: Require central node artifacts
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: >-
+          {{ item.item.name }} is missing at {{ item.item.path }}.
+          Build or provide the artifact before deploying the central nodes.
+      loop: "{{ central_artifacts.results }}"
+
+    - name: Create central deployment directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ central_compose_dir }}"
+        - "{{ central_install_dir }}"
+        - "{{ central_config_dir }}"
+        - "{{ central_log_dir }}"
+        - "{{ central_log_dir }}/function-registry"
+        - "{{ central_log_dir }}/central-repo"
+
+    - name: Copy central Compose file
+      ansible.builtin.template:
+        src: central-compose.yml.j2
+        dest: "{{ central_compose_dir }}/compose.yml"
+        mode: "0644"
+
+    - name: Copy Function registry executable
+      ansible.builtin.copy:
+        src: "{{ function_registry_binary }}"
+        dest: "{{ central_install_dir }}/ermes-function-registry"
+        mode: "0755"
+
+    - name: Copy Function registry configuration
+      ansible.builtin.copy:
+        src: ../files/fr-config.yaml
+        dest: "{{ central_config_dir }}/fr-config.yaml"
+        mode: "0644"
+
+    - name: Copy Central repo executable
+      ansible.builtin.copy:
+        src: "{{ central_repo_binary }}"
+        dest: "{{ central_install_dir }}/ermes-central-repo"
+        mode: "0755"
+
+    - name: Copy Central repo configuration
+      ansible.builtin.copy:
+        src: ../files/cr-config.yaml
+        dest: "{{ central_config_dir }}/cr-config.yaml"
+        mode: "0644"
+
+    - name: Copy Central repo private key
+      ansible.builtin.copy:
+        src: "{{ central_repo_private_key }}"
+        dest: "{{ central_config_dir }}/private.pem"
+        mode: "0600"
+
+    - name: Start central services
+      ansible.builtin.command:
+        cmd: docker compose up -d --remove-orphans
+        chdir: "{{ central_compose_dir }}"
+      changed_when: false
+      when: not ansible_check_mode

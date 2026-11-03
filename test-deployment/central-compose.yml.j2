@@ -1,0 +1,70 @@
+services:
+  redis:
+    image: "{{ redis_image }}"
+    container_name: ermes-central-redis
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --port
+      - "{{ central_redis_port }}"
+      - --requirepass
+      - "{{ redis_password }}"
+    volumes:
+      - redis-data:/data
+
+  minio:
+    image: "{{ minio_image }}"
+    pull_policy: never
+    container_name: ermes-central-minio
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - server
+      - /data
+      - --address
+      - ":{{ central_minio_port }}"
+      - --console-address
+      - ":{{ central_minio_console_port }}"
+    environment:
+      MINIO_ROOT_USER: "{{ minio_root_user }}"
+      MINIO_ROOT_PASSWORD: "{{ minio_root_password }}"
+    volumes:
+      - minio-data:/data
+
+  function-registry:
+    image: debian:bookworm-slim
+    container_name: ermes-central-function-registry
+    restart: unless-stopped
+    network_mode: host
+    command: ["/usr/local/bin/ermes-function-registry"]
+    volumes:
+      - ./bin/ermes-function-registry:/usr/local/bin/ermes-function-registry:ro
+      - ./config/fr-config.yaml:/etc/ermes-fr/config.yaml:ro
+      - ./logs/function-registry:/frLogs
+    depends_on:
+      - minio
+
+  central-repo:
+    image: debian:bookworm-slim
+    container_name: ermes-central-repo
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - /usr/local/bin/ermes-central-repo
+      - --config
+      - /etc/ermes-cr/config.yaml
+    volumes:
+      - ./bin/ermes-central-repo:/usr/local/bin/ermes-central-repo:ro
+      - ./config/cr-config.yaml:/etc/ermes-cr/config.yaml:ro
+      - ./config/private.pem:/etc/ermes-cr/private.pem:ro
+      - ./logs/central-repo:/gtpLogs
+    depends_on:
+      - redis
+      - function-registry
+
+volumes:
+  redis-data:
+  minio-data:
