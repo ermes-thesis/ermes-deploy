@@ -137,6 +137,25 @@ The Compose file uses host networking. The cloud node is reachable at
 `node_address` values in [`inventory.ini`](./inventory.ini). Run the following
 checks from SOLA4, or run them directly on the corresponding host.
 
+### Cloud-edge latency
+
+`deploy-test.sh` applies a 50 ms RTT between the cloud and edge nodes after a
+successful deployment. The playbook applies 25 ms in each direction:
+
+```bash
+./deploy-test.sh
+```
+
+To apply or reset the delay independently:
+
+```bash
+ansible-playbook -i inventory.ini apply_latency.yml -e latency_action=apply
+ansible-playbook -i inventory.ini apply_latency.yml -e latency_action=reset
+```
+
+The deployment script also accepts `--latency apply|reset` when the deployment
+and latency operation should be run together.
+
 ### Check container state and logs
 
 On each host, inspect the Compose services from the deployment directory:

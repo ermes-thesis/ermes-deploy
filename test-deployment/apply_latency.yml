@@ -1,0 +1,63 @@
+---
+- name: Apply or reset cloud-edge network latency
+  hosts: nodes
+  become: true
+  gather_facts: true
+  vars:
+    interface: "{{ ansible_facts.default_ipv4.interface }}"
+    latency_action: apply
+    rtt_ms: 50
+    one_way_delay_ms: "{{ (rtt_ms | int / 2) | int }}"
+
+  pre_tasks:
+    - name: Validate latency action
+      ansible.builtin.assert:
+        that:
+          - latency_action in ['apply', 'reset']
+        fail_msg: "latency_action must be either 'apply' or 'reset'"
+
+  tasks:
+    - name: Install traffic control utilities
+      ansible.builtin.package:
+        name: iproute2
+        state: present
+      when: latency_action == 'apply'
+
+    - name: Load the netem kernel module
+      ansible.builtin.command:
+        argv:
+          - modprobe
+          - sch_netem
+      when: latency_action == 'apply'
+      changed_when: false
+
+    - name: Apply symmetric cloud-edge delay
+      ansible.builtin.command:
+        argv:
+          - tc
+          - qdisc
+          - replace
+          - dev
+          - "{{ interface }}"
+          - root
+          - netem
+          - delay
+          - "{{ one_way_delay_ms }}ms"
+      when: latency_action == 'apply'
+
+    - name: Reset cloud-edge delay
+      ansible.builtin.command:
+        argv:
+          - tc
+          - qdisc
+          - del
+          - dev
+          - "{{ interface }}"
+          - root
+      register: reset_result
+      failed_when:
+        - reset_result.rc != 0
+        - "'No such file or directory' not in reset_result.stderr"
+        - "'Cannot find device' not in reset_result.stderr"
+      changed_when: reset_result.rc == 0
+      when: latency_action == 'reset'

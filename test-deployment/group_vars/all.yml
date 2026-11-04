@@ -18,7 +18,7 @@ nodes:
     domain: "SOLA4/PI"
     address: 10.79.10.243
     is_cloud: false
-    latency_up: 0
+    latency_up: 50
 
 common:
   stateful: true

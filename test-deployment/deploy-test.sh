@@ -3,6 +3,25 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+latency_action="apply"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --latency)
+      if [[ $# -lt 2 || "$2" != "apply" && "$2" != "reset" ]]; then
+        echo "Usage: $0 [--latency apply|reset]" >&2
+        exit 1
+      fi
+      latency_action="$2"
+      shift 2
+      ;;
+    *)
+      echo "Usage: $0 [--latency apply|reset]" >&2
+      exit 1
+      ;;
+  esac
+done
+
 src="../../ermes-generic-node"
 binary="$(mktemp)"
 trap 'rm -f "$binary"' EXIT
@@ -41,3 +60,7 @@ ansible-playbook -i inventory.ini deploy.yml \
 
 echo "Deploying the central nodes to the cloud"
 ansible-playbook -i inventory.ini deploy-central.yml
+
+echo "Setting cloud-edge latency: $latency_action"
+ansible-playbook -i inventory.ini apply_latency.yml \
+  -e "latency_action=$latency_action"
