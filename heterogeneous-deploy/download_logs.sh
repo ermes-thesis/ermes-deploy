@@ -4,8 +4,14 @@ set -euo pipefail
 SSH_USER="cenzato"
 NODE_CONTAINER="ermes-heterogeneous-node"
 NODE_LOG_FILE="/var/log/ermes-node/general.log"
-CENTRAL_LOG_PATH="${1:-/home/cenzato/ermes-central-heterogeneous/logs/}"
-LOCAL_DIR="${2:-./logs}"
+CENTRAL_LOG_PATH="/home/cenzato/ermes-central-heterogeneous/logs/"
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 <logs-directory>" >&2
+    exit 1
+fi
+
+LOCAL_DIR="$1"
 [[ "${CENTRAL_LOG_PATH}" != */ ]] && CENTRAL_LOG_PATH="${CENTRAL_LOG_PATH}/"
 
 rm -rf "$LOCAL_DIR"
@@ -25,7 +31,7 @@ download_node_logs() {
             "docker exec $NODE_CONTAINER cat $NODE_LOG_FILE" > "$target_file"
     fi
 
-    echo "✅ Log del nodo scaricati: $node"
+    echo "✅ Node logs downloaded: $node"
 }
 
 echo "🔹 Downloading logs..."
@@ -42,4 +48,3 @@ rsync -az "$CENTRAL_LOG_PATH/central-repo/" \
 
 wait
 echo "✅ All logs downloaded to $LOCAL_DIR"
-cd
