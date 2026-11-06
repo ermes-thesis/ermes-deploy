@@ -1,12 +1,12 @@
 ---
-- name: Stop isolated Ermes heterogeneous test
+- name: Stop isolated heterogeneous Ermes deployment
   hosts: nodes
   vars:
-    docker_compose_dir: "{{ ansible_env.HOME }}/ermes-test"
-    central_compose_dir: "{{ ansible_env.HOME }}/ermes-central-test"
+    docker_compose_dir: "{{ ansible_env.HOME }}/ermes-heterogeneous"
+    central_compose_dir: "{{ ansible_env.HOME }}/ermes-central-heterogeneous"
     purge_volumes: false
   tasks:
-    - name: Check test deployment directories
+    - name: Check deployment directories
       ansible.builtin.stat:
         path: "{{ item }}"
       loop:
@@ -14,7 +14,7 @@
         - "{{ central_compose_dir }}"
       register: deployment_directories
 
-    - name: Stop and remove test containers
+    - name: Stop and remove deployment containers
       ansible.builtin.command:
         cmd: >-
           docker compose down --remove-orphans

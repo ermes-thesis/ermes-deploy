@@ -1,5 +1,5 @@
 ---
-- name: Ping the two heterogeneous Ermes test nodes
+- name: Ping the two heterogeneous Ermes nodes
   hosts: nodes
   gather_facts: false
   tasks:

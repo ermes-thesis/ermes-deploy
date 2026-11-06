@@ -54,13 +54,13 @@ fi
 echo "Building the amd64 node from $src"
 GOOS=linux GOARCH=amd64 ~/go/bin/go build -C "$src" -ldflags="-s -w" -o "$binary" main
 
-echo "Deploying the heterogeneous test"
+echo "Deploying the heterogeneous deployment"
 ansible-playbook -i inventory.ini deploy.yml \
   -e "ermes_binary_amd64=$binary"
 
 echo "Deploying the central nodes to the cloud"
 ansible-playbook -i inventory.ini deploy-central.yml
 
-echo "Setting cloud-edge latency: $latency_action"
-ansible-playbook -i inventory.ini apply_latency.yml \
-  -e "latency_action=$latency_action"
+# echo "Setting cloud-edge latency: $latency_action"
+# ansible-playbook -i inventory.ini apply_latency.yml \
+#   -e "latency_action=$latency_action"

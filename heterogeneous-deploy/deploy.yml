@@ -1,12 +1,12 @@
 ---
-- name: Deploy isolated Ermes heterogeneous test
+- name: Deploy isolated heterogeneous Ermes nodes
   hosts: nodes
   vars_files:
     - ../group_vars/all.yml
     - group_vars/nodes.yml
     - group_vars/all.yml
   vars:
-    docker_compose_dir: "{{ ansible_env.HOME }}/ermes-test"
+    docker_compose_dir: "{{ ansible_env.HOME }}/ermes-heterogeneous"
     ermes_install_dir: "{{ docker_compose_dir }}/bin"
     ermes_config_dir: "{{ docker_compose_dir }}/config"
     ermes_log_dir: "{{ docker_compose_dir }}/logs"

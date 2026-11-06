@@ -30,5 +30,5 @@
             {{ 'available' if docker_access.rc == 0 else 'unavailable (' ~
             (docker_access.stderr | default(docker_access.msg, true)) ~ ')' }}
           - >-
-            The deployment playbook expects Docker Compose to be preinstalled
-            and usable by this account without sudo.
+            The deployment expects Docker Compose to be preinstalled and usable
+            by this account without sudo.

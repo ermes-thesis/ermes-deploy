@@ -5,7 +5,7 @@
     - ../group_vars/all.yml
     - group_vars/all.yml
   vars:
-    central_compose_dir: "{{ ansible_env.HOME }}/ermes-central-test"
+    central_compose_dir: "{{ ansible_env.HOME }}/ermes-central-heterogeneous"
     central_install_dir: "{{ central_compose_dir }}/bin"
     central_config_dir: "{{ central_compose_dir }}/config"
     central_log_dir: "{{ central_compose_dir }}/logs"
