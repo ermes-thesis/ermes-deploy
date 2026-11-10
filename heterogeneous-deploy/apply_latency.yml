@@ -6,7 +6,7 @@
   vars:
     interface: "{{ ansible_facts.default_ipv4.interface }}"
     latency_action: apply
-    rtt_ms: 50
+    rtt_ms: 30
     one_way_delay_ms: "{{ (rtt_ms | int / 2) | int }}"
 
   pre_tasks:
