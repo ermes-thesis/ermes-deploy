@@ -2,7 +2,6 @@
 - name: Deploy containerized Ermes central nodes
   hosts: cloud_nodes
   vars_files:
-    - ../group_vars/all.yml
     - group_vars/all.yml
   vars:
     central_compose_dir: "{{ ansible_env.HOME }}/ermes-central-heterogeneous"

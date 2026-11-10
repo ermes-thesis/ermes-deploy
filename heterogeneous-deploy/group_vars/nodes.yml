@@ -32,10 +32,10 @@ common:
       size: 100
       ttl: 3600s
     functionRegistry:
-      address: "10.79.10.134"
+      address: "{{ cloud_node_address }}"
       port: 8080
   scheduler:
-    groupTokenProviderAddress: "10.79.10.134"
+    groupTokenProviderAddress: "{{ cloud_node_address }}"
     groupTokenProviderPort: 8081
     wasmRuntime: "wasmtime"
     wasmPoolConfig:

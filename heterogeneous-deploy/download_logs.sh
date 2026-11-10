@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SSH_USER="cenzato"
+SSH_USER="${SSH_USER:-$(id -un)}"
+REMOTE_HOST="${REMOTE_HOST:-sola-pi}"
 NODE_CONTAINER="ermes-heterogeneous-node"
 NODE_LOG_FILE="/var/log/ermes-node/general.log"
-CENTRAL_LOG_PATH="/home/cenzato/ermes-central-heterogeneous/logs/"
+CENTRAL_LOG_PATH="${CENTRAL_LOG_PATH:-$HOME/ermes-central-heterogeneous/logs/}"
 
 if [[ $# -ne 1 ]]; then
     echo "Usage: $0 <logs-directory>" >&2
@@ -27,7 +28,7 @@ download_node_logs() {
     if [[ "$method" == "local" ]]; then
         docker cp "$NODE_CONTAINER:$NODE_LOG_FILE" "$target_file"
     else
-        ssh -o StrictHostKeyChecking=no "$SSH_USER@sola-pi" \
+        ssh -o StrictHostKeyChecking=no "$SSH_USER@$REMOTE_HOST" \
             "docker exec $NODE_CONTAINER cat $NODE_LOG_FILE" > "$target_file"
     fi
 
@@ -36,9 +37,9 @@ download_node_logs() {
 
 echo "🔹 Downloading logs..."
 
-# SOLA4 is the host running this script; only SOLA-PI requires SSH.
-download_node_logs "sola4" "local" &
-download_node_logs "sola-pi" "remote" &
+# The cloud host runs this script locally; only the edge host requires SSH.
+download_node_logs "cloud" "local" &
+download_node_logs "edge" "remote" &
 
 mkdir -p "$LOCAL_DIR/central/function-registry" "$LOCAL_DIR/central/group-token"
 rsync -az "$CENTRAL_LOG_PATH/function-registry/" \

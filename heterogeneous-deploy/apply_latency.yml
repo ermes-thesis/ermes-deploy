@@ -5,6 +5,7 @@
   gather_facts: true
   vars:
     interface: "{{ ansible_facts.default_ipv4.interface }}"
+    latency_command: tc-net
     latency_action: apply
     rtt_ms: 30
     one_way_delay_ms: "{{ (rtt_ms | int / 2) | int }}"
@@ -14,6 +15,7 @@
       ansible.builtin.assert:
         that:
           - latency_action in ['apply', 'reset']
+          - latency_command | length > 0
         fail_msg: "latency_action must be either 'apply' or 'reset'"
 
   tasks:
@@ -34,7 +36,7 @@
     - name: Apply symmetric cloud-edge delay
       ansible.builtin.command:
         argv:
-          - tc
+          - "{{ latency_command }}"
           - qdisc
           - replace
           - dev
@@ -48,7 +50,7 @@
     - name: Reset cloud-edge delay
       ansible.builtin.command:
         argv:
-          - tc
+          - "{{ latency_command }}"
           - qdisc
           - del
           - dev

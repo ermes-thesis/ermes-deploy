@@ -13,21 +13,21 @@ The deployment consists of:
 
 The inventory and topology used by this deployment are local to
 [`inventory.ini`](./inventory.ini) and [`group_vars/all.yml`](./group_vars/all.yml).
-The edge host is reached through the SSH alias `sola-pi`; its Ermes topology
-address is kept separately as `node_address`.
+The edge host is reached through the SSH alias configured in `inventory.ini`; its
+Ermes topology address is kept separately as `node_address`.
 
 ## Prerequisites
 
-Run the deployment from SOLA4 after cloning this repository and its sibling
-source repositories there. The cloud node uses `ansible_connection=local`; only
-the edge node is contacted over SSH.
+Run the deployment from the cloud host after cloning this repository and its
+sibling source repositories there. The cloud node uses
+`ansible_connection=local`; only the edge node is contacted over SSH.
 
 The Ansible account must:
 
 - already have Docker and Docker Compose installed on both hosts;
 - be able to use Docker without `sudo`;
 - have WasmEdge installed on both hosts;
-- have Ansible, Go, and `curl`/`nc` available on SOLA4.
+- have Ansible, Go, and `curl`/`nc` available on the cloud host.
 
 The default WasmEdge library path is
 `/usr/local/lib/libwasmedge.so.0.1.0`. Override it when necessary:
@@ -113,25 +113,28 @@ docker compose logs --tail=100 ermes-node redis
 The node logs are in `$HOME/ermes-heterogeneous/logs`. The central logs are in
 `$HOME/ermes-central-heterogeneous/logs`.
 
-Check Redis and the Ermes protocol ports from SOLA4:
+Check Redis and the Ermes protocol ports from the cloud host. Replace the
+address placeholders with the corresponding `node_address` values from
+[`inventory.ini`](./inventory.ini):
 
 ```bash
-redis-cli -h 10.79.10.134 -p 6379 PING
-redis-cli -h 10.79.10.243 -p 6379 PING
-nc -vz 10.79.10.134 12345
-nc -vz 10.79.10.243 12345
+redis-cli -h <cloud-node-address> -p 6379 PING
+redis-cli -h <edge-node-address> -p 6379 PING
+nc -vz <cloud-node-address> 12345
+nc -vz <edge-node-address> 12345
 ```
 
 Each Redis command should return `PONG`; an open port confirms that the Ermes
-process is listening. Check central MinIO without credentials:
+process is listening. Check central MinIO without credentials. Replace
+`<cloud-node-address>` with the cloud node address from the inventory:
 
 ```bash
-curl -i http://10.79.10.134:9091/minio/health/live
-curl -i http://10.79.10.134:9091/minio/health/ready
+curl -i http://<cloud-node-address>:9091/minio/health/live
+curl -i http://<cloud-node-address>:9091/minio/health/ready
 ```
 
 Both requests should return HTTP `200`. The MinIO console is available at
-<http://10.79.10.134:9092/>.
+`http://<cloud-node-address>:9092/`.
 
 Apply or reset latency independently:
 
@@ -143,6 +146,15 @@ ANSIBLE_CONFIG=heterogeneous-deploy/ansible.cfg \
 ANSIBLE_CONFIG=heterogeneous-deploy/ansible.cfg \
   ansible-playbook -i heterogeneous-deploy/inventory.ini \
   heterogeneous-deploy/apply_latency.yml -e latency_action=reset
+```
+
+The latency playbook uses `tc-net` by default for both operations. To use
+another compatible command, override `latency_command`:
+
+```bash
+ansible-playbook -i heterogeneous-deploy/inventory.ini \
+  heterogeneous-deploy/apply_latency.yml \
+  -e latency_action=apply -e latency_command=tc
 ```
 
 ## Stop and remove

@@ -2,7 +2,6 @@
 - name: Deploy isolated heterogeneous Ermes nodes
   hosts: nodes
   vars_files:
-    - ../group_vars/all.yml
     - group_vars/nodes.yml
     - group_vars/all.yml
   vars:
