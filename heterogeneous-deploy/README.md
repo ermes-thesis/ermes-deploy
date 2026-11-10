@@ -163,7 +163,7 @@ compatible command, override `latency_command`:
 ```bash
 ansible-playbook -i heterogeneous-deploy/inventory.ini \
   heterogeneous-deploy/apply_latency.yml \
-  -e latency_command=tc
+  -e latency_command=/absolute/path/to/tc
 ```
 
 ## Stop and remove
@@ -183,4 +183,12 @@ deletes the deployment data:
 ANSIBLE_CONFIG=heterogeneous-deploy/ansible.cfg \
   ansible-playbook -i heterogeneous-deploy/inventory.ini \
   heterogeneous-deploy/stop.yml -e purge_volumes=true
+```
+
+To independently purge the internal logs of ermes, use:
+
+```bash
+ansible -i heterogeneous-deploy/inventory.ini nodes \
+  -m ansible.builtin.shell \
+  -a 'rm -f "$HOME"/ermes-heterogeneous/logs/*.log "$HOME"/ermes-heterogeneous/logs/*.ndjson'
 ```

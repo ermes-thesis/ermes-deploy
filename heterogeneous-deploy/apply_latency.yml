@@ -21,7 +21,7 @@
 
     - name: Check latency command availability
       ansible.builtin.shell:
-        cmd: "command -v -- {{ latency_command | quote }}"
+        cmd: "command -v {{ latency_command | quote }}"
       register: latency_command_check
       changed_when: false
       failed_when: false
@@ -33,7 +33,9 @@
           - latency_command_check.rc == 0
         fail_msg: >-
           Latency command '{{ latency_command }}' is not available on
-          {{ inventory_hostname }}. Install it or override latency_command.
+          {{ inventory_hostname }} for user {{ ansible_user_id }} with PATH
+          '{{ ansible_env.PATH | default("unset") }}'. Use an absolute path
+          or override latency_command.
 
     - name: Apply symmetric cloud-edge delay
       ansible.builtin.command:
