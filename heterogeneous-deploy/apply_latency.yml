@@ -1,7 +1,6 @@
 ---
 - name: Apply or reset cloud-edge network latency
   hosts: nodes
-  become: true
   gather_facts: true
   vars:
     interface: "{{ ansible_facts.default_ipv4.interface }}"
@@ -11,27 +10,30 @@
     one_way_delay_ms: "{{ (rtt_ms | int / 2) | int }}"
 
   pre_tasks:
-    - name: Validate latency action
+    - name: Validate latency settings
       ansible.builtin.assert:
         that:
           - latency_action in ['apply', 'reset']
           - latency_command | length > 0
-        fail_msg: "latency_action must be either 'apply' or 'reset'"
+        fail_msg: >-
+          latency_action must be 'apply' or 'reset' and latency_command must
+          not be empty
+
+    - name: Check latency command availability
+      ansible.builtin.shell:
+        cmd: "command -v -- {{ latency_command | quote }}"
+      register: latency_command_check
+      changed_when: false
+      failed_when: false
 
   tasks:
-    - name: Install traffic control utilities
-      ansible.builtin.package:
-        name: iproute2
-        state: present
-      when: latency_action == 'apply'
-
-    - name: Load the netem kernel module
-      ansible.builtin.command:
-        argv:
-          - modprobe
-          - sch_netem
-      when: latency_action == 'apply'
-      changed_when: false
+    - name: Require latency command
+      ansible.builtin.assert:
+        that:
+          - latency_command_check.rc == 0
+        fail_msg: >-
+          Latency command '{{ latency_command }}' is not available on
+          {{ inventory_hostname }}. Install it or override latency_command.
 
     - name: Apply symmetric cloud-edge delay
       ansible.builtin.command:

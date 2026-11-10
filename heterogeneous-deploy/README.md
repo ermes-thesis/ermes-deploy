@@ -141,20 +141,29 @@ Apply or reset latency independently:
 ```bash
 ANSIBLE_CONFIG=heterogeneous-deploy/ansible.cfg \
   ansible-playbook -i heterogeneous-deploy/inventory.ini \
-  heterogeneous-deploy/apply_latency.yml -e latency_action=apply
-
-ANSIBLE_CONFIG=heterogeneous-deploy/ansible.cfg \
-  ansible-playbook -i heterogeneous-deploy/inventory.ini \
-  heterogeneous-deploy/apply_latency.yml -e latency_action=reset
+  heterogeneous-deploy/apply_latency.yml \
+  -e latency_action=<apply/reset>
 ```
 
-The latency playbook uses `tc-net` by default for both operations. To use
-another compatible command, override `latency_command`:
+`apply_latency.yml` is standalone: it only needs the inventory and the
+latency command on each target host. It does not deploy or stop any Ermes
+services. Use `--limit` to affect one or more inventory hosts, and override
+the default 30 ms round-trip time with `rtt_ms` when needed:
+
+```bash
+ANSIBLE_CONFIG=heterogeneous-deploy/ansible.cfg \
+  ansible-playbook -i heterogeneous-deploy/inventory.ini \
+  heterogeneous-deploy/apply_latency.yml --limit edge_nodes \
+  -e latency_action=apply -e rtt_ms=50
+```
+
+The playbook uses `tc-net` by default for both operations. To use another
+compatible command, override `latency_command`:
 
 ```bash
 ansible-playbook -i heterogeneous-deploy/inventory.ini \
   heterogeneous-deploy/apply_latency.yml \
-  -e latency_action=apply -e latency_command=tc
+  -e latency_command=tc
 ```
 
 ## Stop and remove
