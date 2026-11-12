@@ -19,7 +19,7 @@ nodes:
     domain: "SOLA4/PI"
     address: 10.79.10.243
     is_cloud: false
-    latency_up: 50
+    latency_up: 30
 
 cloud_node_address: "{{ (nodes | selectattr('is_cloud', 'equalto', true) | first).address }}"
 
