@@ -1,88 +1,93 @@
 # Ermes Deploy
 
-Repository containing Ansible playbooks and configuration files needed to deploy and manage the Ermes framework.
+Ansible playbooks and configuration files to deploy and manage the Ermes
+platform. The end-to-end deployment procedure (build, inventories, deploy
+order) is described in the package top-level `README.md`; this file documents
+the pieces this repository provides.
 
-## 📋 Requirements
+## Requirements
 
-To deploy Ermes you will need [Ansible](https://docs.ansible.com/)
+- `ansible-core` (recent version, e.g. via `pipx`):
+  ```bash
+  pipx install --include-deps ansible-core
+  pipx ensurepath
+  ansible --version
+  ```
+- Ansible roles/collections:
+  ```bash
+  ansible-galaxy role install ricsanfre.minio
+  ansible-galaxy collection install community.general
+  ```
+- SSH access to every node with **passwordless sudo** for the Ansible user.
+- On macOS control machines, export before any playbook:
+  `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` and `no_proxy='*'`.
 
-### Option 1: DevContainer (Recommended)
-The simplest way to run this project is using the provided **DevContainer**, which comes pre-installed with all necessary tools except for your SSH key.
-If you add your SSH key to your local SSH agent, VS Code should automatically forward it to the container.
+> **Note:** Ansible is not natively available on Windows; use WSL.
 
-### Option 2: Manual Installation
-> **Note:** Ansible is not natively available for Windows. Windows users should use WSL (Windows Subsystem for Linux).
+## Inventories
 
-This project requires a recent version of Ansible that is not typically available via standard `apt` repositories. We recommend installing it using `pipx`.
+One inventory per experimental configuration (same machines, different node
+behaviour): `inventories/stateful` (Ermes), `inventories/stateless`
+(Cloud-Data), `inventories/cloud_only` (Cloud-Only). Each contains
+`inventory.ini` (host IPs, groups, jump host) and `group_vars/` (topology and
+the `common` node-config block). Edit these to match your cluster.
 
-```bash
-sudo apt update
-sudo apt install python3 pipx
-pipx install --include-deps ansible-core
-pipx ensurepath
-ansible --version
-```
-
-## 🔌 Connectivity Test
-
-To test the connection with the remote machines you can run 
-
-```bash
-ansible -m ping nodes
-ansible -m ping central_nodes
-```
-
-## 🚀 Deploy infrastructure
-
-### Applying latencies
-
-To apply simulated network latencies to the nodes:
+## Connectivity test
 
 ```bash
-ansible-playbook -i stateless apply-latency.yml
+ansible -i inventories/stateful/inventory.ini -m ping nodes
+ansible -i inventories/stateful/inventory.ini -m ping central_nodes
 ```
+
+## Playbooks
+
+### Network latencies
+
+Injects the inter-tier RTTs with `tc`/NetEm, from each node's `latency_up`:
+```bash
+ansible-playbook -i inventories/<config>/inventory.ini apply_latency.yml
+```
+
+### Client-Cloud latencies
+
+Manual RTT injection between client and cloud nodes for Enoki test comparison:
+```bash
+./scripts/apply_latency_client_cloud.sh
+```
+
+Edit the configuration variables (IPs, proxyjumps) inside it as needed.
 
 ### Central node
 
-This is the node that contains the Function registry and the Central repository.
-
-The playbook expect:
-- the function registry binary in `../ermes-function-registry/ermes-function-registry`
-- the central repo binary in `../ermes-central-repo/ermes-central-repo`
-- the central repo private key in `../ermes-central-repo/.devcontainer/private.pem`
-
-Please manually build the executable in that position.
-> The executable must be compiled for amd64 Linux platform (Golang compiler is provided in the DevContainer).
-
-To deploy the central node the [Ansible minio role](https://github.com/ricsanfre/ansible-role-minio) is required.
-If you use the DevContainer it is already installed, otherwise install it with:
+Deploys the Function Registry, the Central Repository (GTP), MinIO, and Redis:
 ```bash
-ansible-galaxy role install ricsanfre.minio
+ansible-playbook -i inventories/<config>/inventory.ini deploy-central-node.yml
 ```
+The playbook expects the binaries to be built beforehand (see the top-level
+README, Section 3):
+- `../ermes-function-registry/ermes-function-registry`
+- `../ermes-central-repo/ermes-central-repo`
+- the GTP private key in `../ermes-central-repo/keys/private.pem`
 
-To deploy:
+Both run as systemd services on the central node.
+
+### Worker nodes
+
 ```bash
-ansible-playbook deploy-central-node.yml
+ansible-playbook -i inventories/<config>/inventory.ini deploy-ermes-nodes.yml \
+  -e bin_path=/tmp/ermes-node-build/ermes-node -e skip_install=false -e flush=true
 ```
+- `bin_path`: path of the locally-built `ermes-node` binary; the playbook
+  uploads `<bin_path>.tar.xz` (create it with
+  `tar -Jcf ermes-node.tar.xz ermes-node`).
+- `skip_install=true`: skip dependency installation (Redis, WasmEdge) when only
+  updating the binary/config.
+- `flush=true`: reset the platform state before starting.
 
-The function registry and the central repo execute as systemd services on `vmsola-508`
+To only reset the platform state: `flush-ermes-nodes.yml`.
 
-### Ermes Nodes
+### Utility scripts
 
-To deploy the worker nodes, use the provided [wrapper script](./scripts/deploy.sh).
-It expects the `ermes-generic-node` repository to be located in `../ermes-generic-node`.
-
-First-time installation (installs dependencies):
-```bash
-./scripts/deploy.sh --install
-```
-
-Standard deployment:
-```bash
-./scripts/deploy.sh
-```
-
-Deploy with centralized configuration:
-```bash
-./scripts/deploy.sh --centralized
-```
+- `scripts/deploy.sh`: wrapper for the worker-node deployment.
+- `scripts/download_logs.sh`: fetch the per-node `general.log` files (uses
+  `rsync --rsync-path="sudo rsync"` since the logs are root-owned).
