@@ -1,221 +1,292 @@
 ---
-# ============================================================
-# PLAY 1: PREREQUISITI
-# Installa i pacchetti necessari e carica i moduli kernel
-# ============================================================
-- name: "Fase 1: Installazione Pacchetti e Moduli"
-  hosts: nodes
+# ======================================================================
+# Latency emulation for an edge/mid/cloud hierarchy + central storage.
+#
+# Requirements:
+#   * `nodes` variable (vars_files / group_vars/all): list of
+#       { address: <ip>, domain: "IT/Mid1/Edge1", latency_up: <ms> }
+#     Ancestors of every domain must be present (e.g. IT, IT/Mid1).
+#   * Inventory groups: nodes (edge+mid+cloud), cloud_nodes (1 host),
+#     central_nodes (1 host, NOT a member of `nodes`).
+#
+# Tags:
+#   setup  -> packages + kernel modules
+#   reset  -> wipe tc state and recreate HTB root (destructive)
+#   apply  -> reset + rules + verification (always starts from clean state)
+#   verify -> post-condition checks only
+# ======================================================================
+
+# ----------------------------------------------------------------------
+# PLAY 1: prerequisites (nodes AND central storage)
+# ----------------------------------------------------------------------
+- name: "Phase 1: packages and kernel modules"
+  hosts: nodes:central_nodes
   become: true
   gather_facts: false
+  any_errors_fatal: true
   tags: [setup]
 
   tasks:
-    - name: "Assicura che iproute2 sia installato"
-      ansible.builtin.package:
+    - name: "Ensure iproute2 is installed"
+      ansible.builtin.apt:
         name: iproute2
         state: present
+        update_cache: true
+        cache_valid_time: 3600
 
-    - name: "Carica modulo sch_htb"
+    # On Ubuntu cloud kernels sch_netem may live in linux-modules-extra-<kver>.
+    - name: "Load traffic-control kernel modules"
       community.general.modprobe:
-        name: sch_htb
+        name: "{{ item }}"
         state: present
+      loop:
+        - sch_htb
+        - sch_netem
+        - cls_u32
 
-# ============================================================
-# PLAY 2: RESET E PREPARAZIONE ROOT
-# Eseguito su TUTTI i nodi PRIMA di applicare regole specifiche.
-# ============================================================
-- name: "Fase 2: Reset Interfacce e Setup Root HTB"
-  hosts: nodes
+# ----------------------------------------------------------------------
+# PLAY 2: reset + HTB root (nodes AND central storage)
+# ----------------------------------------------------------------------
+- name: "Phase 2: reset interfaces and create HTB root"
+  hosts: nodes:central_nodes
   become: true
   gather_facts: false
-  tags: [reset]
+  any_errors_fatal: true
+  tags: [reset, apply]
 
-  vars:
+  vars: &tc_vars
     interface: "eth0"
+    link_rate: "1000mbit"
+    netem_limit: 100000        # default (1000 pkts) drops packets when BDP is large
+    storage_extra_ms: 2        # storage RTT = cloud RTT + this
+    class_base:                # minor ids are HEX; bases keep ranges disjoint
+      parent: 4096             # 0x1000
+      cloud: 8192              # 0x2000
+      storage: 12288           # 0x3000
 
   tasks:
-    - name: "Reset della configurazione tc esistente"
+    - name: "Check that the interface exists"
+      ansible.builtin.command: "ip link show dev {{ interface }}"
+      changed_when: false
+
+    - name: "Remove existing root qdisc (absence of a custom root is not an error)"
       ansible.builtin.command: "tc qdisc del dev {{ interface }} root"
-      failed_when: false
-      changed_when: false
+      register: tc_reset
+      changed_when: tc_reset.rc == 0
+      failed_when:
+        - tc_reset.rc != 0
+        - "'handle of zero' not in tc_reset.stderr"
 
-    - name: "Setup: Crea la radice HTB (1:)"
-      ansible.builtin.command: "tc qdisc replace dev {{ interface }} root handle 1: htb default 10"
-      changed_when: false
+    - name: "Create HTB root (1:), root class (1:1) and default class (1:10)"
+      ansible.builtin.command:
+        argv: [tc, -batch, "-"]
+        stdin: |
+          qdisc add dev {{ interface }} root handle 1: htb default 10
+          class add dev {{ interface }} parent 1: classid 1:1 htb rate {{ link_rate }}
+          class add dev {{ interface }} parent 1:1 classid 1:10 htb rate {{ link_rate }}
+      changed_when: true
 
-    - name: "Setup: Crea classe radice (1:1)"
-      ansible.builtin.command: "tc class replace dev {{ interface }} parent 1: classid 1:1 htb rate 1000mbit"
-      changed_when: false
-
-    - name: "Setup: Crea classe default (1:10)"
-      ansible.builtin.command: "tc class replace dev {{ interface }} parent 1:1 classid 1:10 htb rate 1000mbit"
-      changed_when: false
-
-# ============================================================
-# PLAY 3: APPLICAZIONE REGOLE COMPLESSE
-# ============================================================
-- name: "Fase 3: Applicazione Latenze (Parent, Cloud, Storage)"
+# ----------------------------------------------------------------------
+# PLAY 3: per-pair latency rules
+# Linear strategy is REQUIRED: Play 2 must finish everywhere before any
+# delegated rule is written to a peer.
+# ----------------------------------------------------------------------
+- name: "Phase 3: apply latencies (parent, cloud, central storage)"
   hosts: nodes
   become: true
   gather_facts: false
+  strategy: linear
+  any_errors_fatal: true      # never leave a half-configured testbed
   tags: [apply]
 
-  vars:
-    interface: "eth0"
+  vars: *tc_vars
 
   pre_tasks:
-    # Calcoliamo la mappa su ogni host per sicurezza (veloce e robusto)
-    - name: "Costruisci mappa IP-Inventory e definisci IP Speciali"
+    - name: "Validate inventory and topology definitions"
+      ansible.builtin.assert:
+        that:
+          - nodes is defined
+          - groups['cloud_nodes'] | default([]) | length == 1
+          - groups['central_nodes'] | default([]) | length == 1
+          - (nodes | selectattr('address', 'equalto', ansible_host) | list | length) == 1
+        fail_msg: >-
+          Need a `nodes` variable, exactly one cloud node, exactly one central
+          node, and exactly one `nodes` entry whose address == ansible_host
+          ({{ ansible_host }}).
+
+    # Delegation targets = every inventory host (includes central-node).
+    - name: "Build lookup tables"
       ansible.builtin.set_fact:
-        ip_to_inv_map: "{{ dict(groups['nodes'] | map('extract', hostvars, ['ansible_host']) | zip(groups['nodes'])) }}"
+        ip_to_inv_map: >-
+          {{ dict(groups['all']
+                  | map('extract', hostvars, 'ansible_host')
+                  | zip(groups['all'])) }}
         cloud_ip: "{{ hostvars[groups['cloud_nodes'][0]]['ansible_host'] }}"
-        central_node_ip: "{{ hostvars[groups['central_nodes'][0]]['ansible_host'] }}"
+        central_ip: "{{ hostvars[groups['central_nodes'][0]]['ansible_host'] }}"
+        my_node_info: >-
+          {{ nodes | selectattr('address', 'equalto', ansible_host) | list | first }}
+
+    - name: "Sum latency_up over this node's ancestors (self included)"
+      ansible.builtin.set_fact:
+        # Output format "<total_ms>/<ancestors_found>" (string, never auto-converted)
+        latency_calc: >-
+          {%- set ns = namespace(total=0, found=0) -%}
+          {%- for n in nodes -%}
+            {%- if my_node_info.domain == n.domain
+                   or my_node_info.domain.startswith(n.domain ~ '/') -%}
+              {%- set ns.total = ns.total + (n.latency_up | int) -%}
+              {%- set ns.found = ns.found + 1 -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.total }}/{{ ns.found }}
+
+    - name: "Validate the ancestor chain is complete"
+      ansible.builtin.assert:
+        that:
+          - (latency_calc.split('/')[1] | int) == (my_node_info.domain.split('/') | length)
+          - (latency_calc.split('/')[0] | int) >= 0
+        fail_msg: >-
+          Incomplete domain chain for {{ my_node_info.domain }}: every ancestor
+          domain must have an entry in `nodes`.
+
+    - name: "Derive node identity and parent"
+      ansible.builtin.set_fact:
+        accumulated_latency: "{{ latency_calc.split('/')[0] | int }}"
+        my_ip: "{{ my_node_info.address }}"
+        my_octet: "{{ my_node_info.address.split('.')[-1] }}"
+        has_parent: "{{ '/' in my_node_info.domain }}"
+        parent_domain: "{{ my_node_info.domain.rsplit('/', 1)[0] if '/' in my_node_info.domain else '' }}"
+
+    - name: "Resolve parent address"
+      ansible.builtin.set_fact:
+        parent_ip: >-
+          {{ (nodes | selectattr('domain', 'equalto', parent_domain)
+                    | map(attribute='address') | list | first)
+             if has_parent | bool else '' }}
+
+    # One uniform list: each entry = one peer this node must reach with latency.
+    #   lat = total one-way-pair latency; half applied locally, half on the peer.
+    - name: "Build rule list"
+      ansible.builtin.set_fact:
+        tc_rules: >-
+          {{
+            ([{'tag': 'parent', 'peer': parent_ip, 'base': class_base.parent,
+               'lat': my_node_info.latency_up | int}]
+               if has_parent | bool else [])
+            + ([{'tag': 'cloud', 'peer': cloud_ip, 'base': class_base.cloud,
+                 'lat': accumulated_latency | int}]
+               if (my_ip != cloud_ip and parent_ip != cloud_ip) else [])
+            + ([{'tag': 'storage', 'peer': central_ip, 'base': class_base.storage,
+                 'lat': (accumulated_latency | int) + (storage_extra_ms | int)}]
+               if my_ip != central_ip else [])
+          }}
+
+    - name: "Show planned rules"
+      ansible.builtin.debug:
+        var: tc_rules
+        verbosity: 1
+
   tasks:
-    - name: Trova le info del nodo corrente
-      ansible.builtin.set_fact:
-        my_node_info: "{{ nodes | selectattr('address', 'equalto', ansible_host) | first }}"
-
-    # --------------------------------------------------------
-    # CALCOLO LATENZA CUMULATIVA (Somma latenze verso la radice)
-    # --------------------------------------------------------
-    - name: "Calcola Latenza Totale verso Cloud (Edge -> Mid -> Cloud)"
-      ansible.builtin.set_fact:
-        accumulated_latency: >-
-          {% set ns = namespace(lat=0, current_domain=my_node_info.domain) %}
-          {% for i in range(10) %}
-             {% if ns.current_domain != '' %}
-                 {# Cerca il nodo corrispondente al dominio corrente #}
-                 {% set curr_nodes = nodes | selectattr('domain', 'equalto', ns.current_domain) | list %}
-                 {% if curr_nodes | length > 0 %}
-                     {% set curr = curr_nodes[0] %}
-                     {% set ns.lat = ns.lat + (curr.latency_up | int) %}
-                     {# Logica per risalire #}
-                     {% if '/' in ns.current_domain %}
-                         {% set ns.current_domain = ns.current_domain.rsplit('/', 1)[0] %}
-                     {% else %}
-                         {# Siamo in cima (es. IT), stop #}
-                         {% set ns.current_domain = '' %}
-                     {% endif %}
-                 {% else %}
-                     {# Dominio non trovato #}
-                     {% set ns.current_domain = '' %}
-                 {% endif %}
-             {% endif %}
-          {% endfor %}
-          {{ ns.lat | int }}
-
-    # --------------------------------------------------------
-    # PREPARAZIONE VARIABILI
-    # --------------------------------------------------------
-    - name: "Prepara variabili ID e Parent"
-      ansible.builtin.set_fact:
-        my_ip_octet: "{{ my_node_info.address.split('.')[-1] }}"
-        parent_domain: "{{ my_node_info.domain.rsplit('/', 1)[0] | default('') }}"
-
-    - name: "Trova Info Parent Diretto"
-      ansible.builtin.set_fact:
-        parent_node_info: "{{ nodes | selectattr('domain', 'equalto', parent_domain) | first | default(null) }}"
-      when: "'/' in my_node_info.domain"
-
-    # ========================================================
-    # PARTE 1: REGOLA VERSO PARENT DIRETTO
-    # Handle: 1:10xx
-    # ========================================================
-    - name: "APPLICAZIONE: Nodo -> Parent (Esistente)"
-      when:
-        - parent_node_info is defined
-        - parent_node_info is not none
+    # ------------------------------------------------------------------
+    # UP: egress from this node toward each peer (runs on this node).
+    # Different hosts -> safe in parallel.
+    # ------------------------------------------------------------------
+    - name: "UP: local egress rule toward each peer"
+      ansible.builtin.command:
+        argv: [tc, -batch, "-"]
+        stdin: |
+          class replace dev {{ interface }} parent 1:1 classid 1:{{ minor }} htb rate {{ link_rate }}
+          qdisc replace dev {{ interface }} parent 1:{{ minor }} handle {{ minor }}: netem delay {{ delay_ms }}ms limit {{ netem_limit }}
+          filter replace dev {{ interface }} parent 1: protocol ip prio 10 u32 match ip dst {{ item.peer }}/32 flowid 1:{{ minor }}
       vars:
-        # FIX SICUREZZA: Evita crash se parent_node_info è undefined
-        target_inv: "{{ ip_to_inv_map[parent_node_info.address] if (parent_node_info is defined and parent_node_info) else 'localhost' }}"
-        lat_local: "{{ (my_node_info.latency_up | int / 2) | int }}"
-        lat_remote: "{{ (my_node_info.latency_up | int) - ((my_node_info.latency_up | int / 2) | int) }}"
-        handle_prefix: "10"
-      block:
-        - name: "UP (Parent): Configura regola locale"
-          vars:
-            p_octet: "{{ parent_node_info.address.split('.')[-1] if (parent_node_info is defined and parent_node_info) else '0' }}"
-          ansible.builtin.shell: >
-            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ p_octet }} htb rate 1000mbit &&
-            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ p_octet }} handle {{ handle_prefix }}{{ p_octet }}: netem delay {{ lat_local }}ms &&
-            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ parent_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ p_octet }}
-          changed_when: false
+        minor: "{{ '%x' | format((item.base | int) + (item.peer.split('.')[-1] | int)) }}"
+        delay_ms: "{{ (item.lat | int) // 2 }}"
+      loop: "{{ tc_rules }}"
+      loop_control:
+        label: "{{ item.tag }} -> {{ item.peer }} ({{ item.lat }}ms total)"
+      changed_when: true
 
-        - name: "DOWN (Parent): Delega regola su Parent"
-          delegate_to: "{{ target_inv }}"
-          vars:
-            child_octet: "{{ my_ip_octet }}"
-          ansible.builtin.shell: >
-            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ child_octet }} htb rate 1000mbit &&
-            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ child_octet }} handle {{ handle_prefix }}{{ child_octet }}: netem delay {{ lat_remote }}ms &&
-            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ my_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ child_octet }}
-          changed_when: false
-
-    # ========================================================
-    # PARTE 2: REGOLA VERSO CLOUD (Edge -> ... -> Cloud)
-    # Handle: 1:20xx (Offset 20)
-    # Si applica SOLO se il Parent NON è già il Cloud
-    # ========================================================
-    - name: "APPLICAZIONE: Nodo -> Cloud (Diretto Overlay)"
-      when:
-        - cloud_ip is defined
-        - my_node_info.address != cloud_ip
-        - (parent_node_info is not defined) or (parent_node_info.address != cloud_ip)
+    # ------------------------------------------------------------------
+    # DOWN: return path, written on the peer. Many nodes target the same
+    # peer, so serialize (throttle) to avoid concurrent tc writes on one host.
+    # ------------------------------------------------------------------
+    - name: "DOWN: return-path rule on each peer"
+      ansible.builtin.command:
+        argv: [tc, -batch, "-"]
+        stdin: |
+          class replace dev {{ interface }} parent 1:1 classid 1:{{ minor }} htb rate {{ link_rate }}
+          qdisc replace dev {{ interface }} parent 1:{{ minor }} handle {{ minor }}: netem delay {{ delay_ms }}ms limit {{ netem_limit }}
+          filter replace dev {{ interface }} parent 1: protocol ip prio 10 u32 match ip dst {{ my_ip }}/32 flowid 1:{{ minor }}
       vars:
-        target_inv: "{{ ip_to_inv_map[cloud_ip] }}"
-        lat_total: "{{ accumulated_latency | int }}"
-        lat_local: "{{ (lat_total | int / 2) | int }}"
-        lat_remote: "{{ (lat_total | int) - ((lat_total | int / 2) | int) }}"
-        handle_prefix: "20"
-        target_octet: "{{ cloud_ip.split('.')[-1] }}"
-      block:
-        - name: "UP (Cloud): Configura regola verso Cloud Root"
-          ansible.builtin.shell: >
-            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ target_octet }} htb rate 1000mbit &&
-            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ target_octet }} handle {{ handle_prefix }}{{ target_octet }}: netem delay {{ lat_local }}ms &&
-            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ cloud_ip }}/32 flowid 1:{{ handle_prefix }}{{ target_octet }}
-          changed_when: false
+        minor: "{{ '%x' | format((item.base | int) + (my_octet | int)) }}"
+        delay_ms: "{{ (item.lat | int) - ((item.lat | int) // 2) }}"
+      delegate_to: "{{ ip_to_inv_map[item.peer] }}"
+      throttle: 1
+      loop: "{{ tc_rules }}"
+      loop_control:
+        label: "{{ item.tag }}: {{ item.peer }} -> {{ my_ip }}"
+      changed_when: true
 
-        - name: "DOWN (Cloud): Delega regola su Cloud Root"
-          delegate_to: "{{ target_inv }}"
-          vars:
-            child_octet: "{{ my_ip_octet }}"
-          ansible.builtin.shell: >
-            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ child_octet }} htb rate 1000mbit &&
-            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ child_octet }} handle {{ handle_prefix }}{{ child_octet }}: netem delay {{ lat_remote }}ms &&
-            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ my_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ child_octet }}
-          changed_when: false
+# ----------------------------------------------------------------------
+# PLAY 4: post-conditions
+# ----------------------------------------------------------------------
+- name: "Phase 4: verify"
+  hosts: nodes:central_nodes
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tags: [apply, verify]
 
-    # ========================================================
-    # PARTE 3: REGOLA VERSO CENTRAL STORAGE
-    # Handle: 1:30xx (Offset 30)
-    # Latenza = Latenza Cloud (accumulata) + 2ms
-    # ========================================================
-    - name: "APPLICAZIONE: Nodo -> Central Storage"
-      when:
-        - central_node_ip is defined
-        - my_node_info.address != central_node_ip
-      vars:
-        target_inv: "{{ ip_to_inv_map[central_node_ip] }}"
-        lat_total: "{{ (accumulated_latency | int) + 2 }}"
-        lat_local: "{{ (lat_total | int / 2) | int }}"
-        lat_remote: "{{ (lat_total | int) - ((lat_total | int / 2) | int) }}"
-        handle_prefix: "30"
-        target_octet: "{{ central_node_ip.split('.')[-1] }}"
-      block:
-        - name: "UP (Storage): Configura regola verso Storage"
-          ansible.builtin.shell: >
-            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ target_octet }} htb rate 1000mbit &&
-            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ target_octet }} handle {{ handle_prefix }}{{ target_octet }}: netem delay {{ lat_local }}ms &&
-            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ central_node_ip }}/32 flowid 1:{{ handle_prefix }}{{ target_octet }}
-          changed_when: false
+  vars: *tc_vars
 
-        - name: "DOWN (Storage): Delega regola su Storage Node"
-          delegate_to: "{{ target_inv }}"
-          vars:
-            child_octet: "{{ my_ip_octet }}"
-          ansible.builtin.shell: >
-            tc class replace dev {{ interface }} parent 1:1 classid 1:{{ handle_prefix }}{{ child_octet }} htb rate 1000mbit &&
-            tc qdisc replace dev {{ interface }} parent 1:{{ handle_prefix }}{{ child_octet }} handle {{ handle_prefix }}{{ child_octet }}: netem delay {{ lat_remote }}ms &&
-            tc filter replace dev {{ interface }} parent 1:0 protocol ip prio 10 u32 match ip dst {{ my_node_info.address }}/32 flowid 1:{{ handle_prefix }}{{ child_octet }}
-          changed_when: false
+  tasks:
+    - name: "Read qdisc and filter state"
+      ansible.builtin.command: "tc qdisc show dev {{ interface }}"
+      register: tc_state
+      changed_when: false
+
+    - name: "Every host must have an HTB root and at least one netem leaf"
+      ansible.builtin.assert:
+        that:
+          - "'htb 1:' in tc_state.stdout"
+          - "'netem' in tc_state.stdout"
+        fail_msg: "Unexpected tc state on {{ inventory_hostname }}:\n{{ tc_state.stdout }}"
+
+# ----------------------------------------------------------------------
+# PLAY 5: clear ALL emulated latencies (opt-in only)
+#   ansible-playbook -i inventory latency-topology.yml --tags clear
+#
+# `never` is essential: without it this play would run on a plain
+# invocation (no --tags) and wipe the rules that Phase 3 just applied.
+# Do NOT combine with --limit: rules are written in pairs (UP locally,
+# DOWN on the peer), so a partial clear leaves asymmetric latency.
+# ----------------------------------------------------------------------
+- name: "Clear: remove all tc latency state"
+  hosts: nodes:central_nodes
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tags: [never, clear]
+
+  vars: *tc_vars
+
+  tasks:
+    - name: "Delete root qdisc (drops HTB classes, netem leaves, u32 filters)"
+      ansible.builtin.command: "tc qdisc del dev {{ interface }} root"
+      register: tc_clear
+      changed_when: tc_clear.rc == 0
+      failed_when:
+        - tc_clear.rc != 0
+        - "'handle of zero' not in tc_clear.stderr"
+
+    - name: "Read qdisc state"
+      ansible.builtin.command: "tc qdisc show dev {{ interface }}"
+      register: tc_after
+      changed_when: false
+
+    - name: "No HTB/netem must remain"
+      ansible.builtin.assert:
+        that:
+          - "'netem' not in tc_after.stdout"
+          - "'htb' not in tc_after.stdout"
+        fail_msg: "Residual shaping on {{ inventory_hostname }}:\n{{ tc_after.stdout }}"

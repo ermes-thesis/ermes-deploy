@@ -1,0 +1,5 @@
+---
+roles:
+  - name: ricsanfre.minio
+    src: git+https://github.com/ermes-thesis/ansible-role-minio.git
+    version: master

@@ -15,7 +15,7 @@ the pieces this repository provides.
   ```
 - Ansible roles/collections:
   ```bash
-  ansible-galaxy role install ricsanfre.minio
+  ansible-galaxy role install -r requirements.yml
   ansible-galaxy collection install community.general
   ```
 - SSH access to every node with **passwordless sudo** for the Ansible user.
@@ -45,7 +45,8 @@ ansible -i inventories/stateful/inventory.ini -m ping central_nodes
 
 Injects the inter-tier RTTs with `tc`/NetEm, from each node's `latency_up`:
 ```bash
-ansible-playbook -i inventories/<config>/inventory.ini apply_latency.yml
+ansible-playbook -i inventories/<config>/inventory.ini apply_latency.yml \
+--tags apply/clear
 ```
 
 ### Client-Cloud latencies
@@ -85,6 +86,11 @@ ansible-playbook -i inventories/<config>/inventory.ini deploy-ermes-nodes.yml \
 - `flush=true`: reset the platform state before starting.
 
 To only reset the platform state: `flush-ermes-nodes.yml`.
+
+To stop all the Ermes services (centralized and workers):
+```bash
+ansible-playbook -i inventories/<config>/inventory.ini stop-ermes.yml
+```
 
 ### Utility scripts
 
