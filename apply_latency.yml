@@ -9,6 +9,10 @@
 #   * Inventory groups: nodes (edge+mid+cloud), cloud_nodes (1 host),
 #     central_nodes (1 host, NOT a member of `nodes`).
 #
+# Variables (override with -e):
+#   client_cloud_rtt_ms  default 0 = disabled. >0 injects that RTT between the
+#                        `clients` group and the cloud node (Phase 3b).
+#
 # Tags:
 #   setup  -> packages + kernel modules
 #   reset  -> wipe tc state and recreate HTB root (destructive)
@@ -20,7 +24,7 @@
 # PLAY 1: prerequisites (nodes AND central storage)
 # ----------------------------------------------------------------------
 - name: "Phase 1: packages and kernel modules"
-  hosts: nodes:central_nodes
+  hosts: nodes:central_nodes:clients
   become: true
   gather_facts: false
   any_errors_fatal: true
@@ -48,7 +52,7 @@
 # PLAY 2: reset + HTB root (nodes AND central storage)
 # ----------------------------------------------------------------------
 - name: "Phase 2: reset interfaces and create HTB root"
-  hosts: nodes:central_nodes
+  hosts: nodes:central_nodes:clients
   become: true
   gather_facts: false
   any_errors_fatal: true
@@ -58,13 +62,22 @@
     interface: "eth0"
     link_rate: "1000mbit"
     netem_limit: 100000        # default (1000 pkts) drops packets when BDP is large
+    htb_r2q: 1000              # quantum = rate/r2q = 125 kB at 1 Gbit; silences "quantum is big"
+    client_cloud_rtt_ms: 0     # 0 = disabled (clients keep the kernel default qdisc)
     storage_extra_ms: 2        # storage RTT = cloud RTT + this
     class_base:                # minor ids are HEX; bases keep ranges disjoint
       parent: 4096             # 0x1000
       cloud: 8192              # 0x2000
       storage: 12288           # 0x3000
+      client: 16384            # 0x4000 (client <-> cloud)
 
   tasks:
+    - name: "Validate client_cloud_rtt_ms (before touching any host)"
+      ansible.builtin.assert:
+        that: "client_cloud_rtt_ms | string is match('^[0-9]+$')"
+        fail_msg: "client_cloud_rtt_ms must be a non-negative integer (ms)"
+      run_once: true
+
     - name: "Check that the interface exists"
       ansible.builtin.command: "ip link show dev {{ interface }}"
       changed_when: false
@@ -77,11 +90,14 @@
         - tc_reset.rc != 0
         - "'handle of zero' not in tc_reset.stderr"
 
+    # Clients get an HTB root only when client latency is enabled; otherwise
+    # they stay on the kernel default qdisc (clean baseline).
     - name: "Create HTB root (1:), root class (1:1) and default class (1:10)"
+      when: inventory_hostname not in groups['clients'] or (client_cloud_rtt_ms | int) > 0
       ansible.builtin.command:
         argv: [tc, -batch, "-"]
         stdin: |
-          qdisc add dev {{ interface }} root handle 1: htb default 10
+          qdisc add dev {{ interface }} root handle 1: htb default 10 r2q {{ htb_r2q }}
           class add dev {{ interface }} parent 1: classid 1:1 htb rate {{ link_rate }}
           class add dev {{ interface }} parent 1:1 classid 1:10 htb rate {{ link_rate }}
       changed_when: true
@@ -228,10 +244,60 @@
       changed_when: true
 
 # ----------------------------------------------------------------------
+# PLAY 3b: optional client <-> cloud latency
+#   ansible-playbook -i inventory latency-topology.yml --tags apply -e client_cloud_rtt_ms=30
+# Skipped entirely when client_cloud_rtt_ms is 0. UP rule on the client,
+# DOWN rule on the cloud node (same split as Phase 3: floor(RTT/2) / rest).
+# ----------------------------------------------------------------------
+- name: "Phase 3b: optional client <-> cloud latency"
+  hosts: clients
+  become: true
+  gather_facts: false
+  strategy: linear
+  any_errors_fatal: true
+  tags: [apply]
+
+  vars: *tc_vars
+
+  tasks:
+    - name: "Client <-> cloud rules"
+      when: (client_cloud_rtt_ms | int) > 0
+      vars:
+        cloud_inv: "{{ groups['cloud_nodes'][0] }}"
+        cloud_ip: "{{ hostvars[groups['cloud_nodes'][0]]['ansible_host'] }}"
+        client_ip: "{{ ansible_host }}"
+        up_ms: "{{ (client_cloud_rtt_ms | int) // 2 }}"
+        down_ms: "{{ (client_cloud_rtt_ms | int) - ((client_cloud_rtt_ms | int) // 2) }}"
+      block:
+        - name: "UP: client -> cloud"
+          ansible.builtin.command:
+            argv: [tc, -batch, "-"]
+            stdin: |
+              class replace dev {{ interface }} parent 1:1 classid 1:{{ minor }} htb rate {{ link_rate }}
+              qdisc replace dev {{ interface }} parent 1:{{ minor }} handle {{ minor }}: netem delay {{ up_ms }}ms limit {{ netem_limit }}
+              filter replace dev {{ interface }} parent 1: protocol ip prio 10 u32 match ip dst {{ cloud_ip }}/32 flowid 1:{{ minor }}
+          vars:
+            minor: "{{ '%x' | format((class_base.client | int) + (cloud_ip.split('.')[-1] | int)) }}"
+          changed_when: true
+
+        - name: "DOWN: cloud -> client (serialised, many clients write to one cloud)"
+          ansible.builtin.command:
+            argv: [tc, -batch, "-"]
+            stdin: |
+              class replace dev {{ interface }} parent 1:1 classid 1:{{ minor }} htb rate {{ link_rate }}
+              qdisc replace dev {{ interface }} parent 1:{{ minor }} handle {{ minor }}: netem delay {{ down_ms }}ms limit {{ netem_limit }}
+              filter replace dev {{ interface }} parent 1: protocol ip prio 10 u32 match ip dst {{ client_ip }}/32 flowid 1:{{ minor }}
+          vars:
+            minor: "{{ '%x' | format((class_base.client | int) + (client_ip.split('.')[-1] | int)) }}"
+          delegate_to: "{{ cloud_inv }}"
+          throttle: 1
+          changed_when: true
+
+# ----------------------------------------------------------------------
 # PLAY 4: post-conditions
 # ----------------------------------------------------------------------
 - name: "Phase 4: verify"
-  hosts: nodes:central_nodes
+  hosts: nodes:central_nodes:clients
   become: true
   gather_facts: false
   any_errors_fatal: true
@@ -245,11 +311,14 @@
       register: tc_state
       changed_when: false
 
-    - name: "Every host must have an HTB root and at least one netem leaf"
+    # nodes/central/cloud: shaping expected. clients: only if RTT injection is on.
+    - name: "Check expected shaping state"
+      vars:
+        expect_shaping: "{{ inventory_hostname not in groups['clients'] or (client_cloud_rtt_ms | int) > 0 }}"
       ansible.builtin.assert:
         that:
-          - "'htb 1:' in tc_state.stdout"
-          - "'netem' in tc_state.stdout"
+          - "('htb 1:' in tc_state.stdout) == (expect_shaping | bool)"
+          - "('netem' in tc_state.stdout) == (expect_shaping | bool)"
         fail_msg: "Unexpected tc state on {{ inventory_hostname }}:\n{{ tc_state.stdout }}"
 
 # ----------------------------------------------------------------------
@@ -262,7 +331,7 @@
 # DOWN on the peer), so a partial clear leaves asymmetric latency.
 # ----------------------------------------------------------------------
 - name: "Clear: remove all tc latency state"
-  hosts: nodes:central_nodes
+  hosts: nodes:central_nodes:clients
   become: true
   gather_facts: false
   any_errors_fatal: true

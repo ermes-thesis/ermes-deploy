@@ -49,6 +49,12 @@ ansible-playbook -i inventories/<config>/inventory.ini apply_latency.yml \
 --tags apply/clear
 ```
 
+To add the RTT between the client and the cloud:
+```bash
+ansible-playbook -i inventories/<config>/inventory.ini apply_latency.yml \
+--tags apply -e client_cloud_rtt_ms=30
+```
+
 ### Client-Cloud latencies
 
 Manual RTT injection between client and cloud nodes for Enoki test comparison:
